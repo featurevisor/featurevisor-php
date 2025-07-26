@@ -28,7 +28,10 @@
   "autoload": {
     "psr-4": {
       "Featurevisor\\": "src/"
-    }
+    },
+    "files": [
+      "src/index.php"
+    ]
   },
   "autoload-dev": {
     "psr-4": {
