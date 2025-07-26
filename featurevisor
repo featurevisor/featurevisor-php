@@ -1,0 +1,536 @@
+#!/usr/bin/env php
+<?php
+
+require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/src/index.php';
+
+use function Featurevisor\createInstance;
+
+/**
+ * CLI Options
+ */
+function parseCliOption(array $argv, string $key): mixed {
+    $prefix = '--' . $key;
+    foreach ($argv as $arg) {
+        // Handle boolean flags without value
+        if ($arg === $prefix) {
+            return true;
+        }
+
+        // Handle flags with values
+        if (strpos($arg, $prefix . '=') === 0) {
+            return substr($arg, strlen($prefix) + 1);
+        }
+    }
+
+    return null;
+}
+
+$cwd = getcwd();
+
+$cliOptions = [
+    '0' => $argv[1] ?? null,
+    'assertionPattern' => parseCliOption($argv, 'assertionPattern'),
+    'context' => parseCliOption($argv, 'context'),
+    'environment' => parseCliOption($argv, 'environment'),
+    'feature' => parseCliOption($argv, 'feature'),
+    'keyPattern' => parseCliOption($argv, 'keyPattern'),
+    'n' => parseCliOption($argv, 'n'),
+    'onlyFailures' => parseCliOption($argv, 'onlyFailures'),
+    'quiet' => parseCliOption($argv, 'quiet'),
+    'variable' => parseCliOption($argv, 'variable'),
+    'variation' => parseCliOption($argv, 'variation'),
+    'verbose' => parseCliOption($argv, 'verbose'),
+    'inflate' => parseCliOption($argv, 'inflate'),
+    'rootDirectoryPath' => $cwd,
+    'populateUuid' => array_reduce($argv, function($acc, $arg) {
+        if (strpos($arg, '--populateUuid=') === 0) {
+            $acc[] = substr($arg, strlen('--populateUuid='));
+        }
+        return $acc;
+    }, []),
+];
+
+if (parseCliOption($argv, 'rootDirectoryPath')) {
+    $cliOptions['rootDirectoryPath'] = parseCliOption($argv, 'rootDirectoryPath');
+} else if (parseCliOption($argv, 'projectDirectoryPath')) {
+    $cliOptions['rootDirectoryPath'] = parseCliOption($argv, 'projectDirectoryPath');
+}
+
+/**
+ * Common functions
+ */
+function executeCommand(string $command): string {
+    $output = [];
+    exec($command, $output);
+    return implode("\n", $output);
+}
+
+function getConfig(string $featurevisorProjectPath): array {
+    echo "Getting config..." . PHP_EOL;
+    $configOutput = executeCommand("(cd $featurevisorProjectPath && npx featurevisor config --json)");
+    return json_decode($configOutput, true);
+}
+
+function getSegments(string $featurevisorProjectPath): array {
+    echo "Getting segments..." . PHP_EOL;
+    $segmentsOutput = executeCommand("(cd $featurevisorProjectPath && npx featurevisor list --segments --json)");
+    $segments = json_decode($segmentsOutput, true);
+    $segmentsByKey = [];
+    foreach ($segments as $segment) {
+        $segmentsByKey[$segment['key']] = $segment;
+    }
+    return $segmentsByKey;
+}
+
+function buildDatafiles(string $featurevisorProjectPath, array $environments): array {
+    $datafilesByEnvironment = [];
+    foreach ($environments as $environment) {
+        echo "Building datafile for environment: $environment..." . PHP_EOL;
+        $datafileOutput = executeCommand("(cd $featurevisorProjectPath && npx featurevisor build --environment=$environment --json)");
+        $datafilesByEnvironment[$environment] = json_decode($datafileOutput, true);
+    }
+    return $datafilesByEnvironment;
+}
+
+function getLoggerLevel(array $cliOptions): string {
+    $level = 'warn';
+    if ($cliOptions['verbose'] === true) {
+        $level = 'debug';
+    } else if ($cliOptions['quiet'] === true) {
+        $level = 'error';
+    }
+    return $level;
+}
+
+function generateUuid(): string {
+    return bin2hex(random_bytes(16));
+}
+
+/**
+ * Test
+ */
+function getTests(string $featurevisorProjectPath, array $cliOptions): array {
+    $testsSuffix = "";
+    if ($cliOptions['keyPattern']) {
+        $testsSuffix = " --keyPattern=" . $cliOptions['keyPattern'];
+    }
+    if ($cliOptions['assertionPattern']) {
+        $testsSuffix .= " --assertionPattern=" . $cliOptions['assertionPattern'];
+    }
+
+    $testsOutput = executeCommand("(cd $featurevisorProjectPath && npx featurevisor list --tests --applyMatrix --json" . $testsSuffix . ")");
+    return json_decode($testsOutput, true);
+}
+
+function testFeature(array $assertion, string $featureKey, $f, string $level): array {
+    $context = isset($assertion["context"]) ? $assertion["context"] : [];
+    $sticky = isset($assertion["sticky"]) ? $assertion["sticky"] : [];
+
+    // Update the SDK instance context and sticky values for this assertion
+    $f->setContext($context);
+    $f->setSticky($sticky);
+
+    $hasError = false;
+    $errors = "";
+    $startTime = microtime(true);
+
+    // Test expectedToBeEnabled
+    if (isset($assertion["expectedToBeEnabled"])) {
+        $isEnabled = $f->isEnabled($featureKey, $context);
+        if ($isEnabled !== $assertion["expectedToBeEnabled"]) {
+            $hasError = true;
+            $errors .= "      ✘ expectedToBeEnabled: expected " . json_encode($assertion["expectedToBeEnabled"]) . " but received " . json_encode($isEnabled) . PHP_EOL;
+        }
+    }
+
+    // Test expectedVariation
+    if (isset($assertion["expectedVariation"])) {
+        $variation = $f->getVariation($featureKey, $context, [
+            'defaultVariationValue' => isset($assertion["defaultVariationValue"]) ? $assertion["defaultVariationValue"] : null,
+        ]);
+        if ($variation !== $assertion["expectedVariation"]) {
+            $hasError = true;
+            $errors .= "      ✘ expectedVariation: expected " . json_encode($assertion["expectedVariation"]) . " but received " . json_encode($variation) . PHP_EOL;
+        }
+    }
+
+    // Test expectedVariables
+    if (isset($assertion["expectedVariables"])) {
+        foreach (array_keys($assertion["expectedVariables"]) as $variableKey) {
+            $expectedValue = $assertion["expectedVariables"][$variableKey];
+            if (is_string($expectedValue) &&
+                (str_starts_with($expectedValue, '{') || str_starts_with($expectedValue, '[')) &&
+                (str_ends_with($expectedValue, '}') || str_ends_with($expectedValue, ']'))) {
+                $expectedValue = json_decode($expectedValue, true);
+            }
+            $actualValue = $f->getVariable($featureKey, $variableKey, $context, [
+                'defaultVariableValue' => isset($assertion["defaultVariableValues"]) && isset($assertion["defaultVariableValues"][$variableKey])
+                    ? $assertion["defaultVariableValues"][$variableKey]
+                    : null,
+            ]);
+            if ($actualValue !== $expectedValue) {
+                $hasError = true;
+                $errors .= "      ✘ expectedVariables.$variableKey: expected " . json_encode($expectedValue) . " but received " . json_encode($actualValue) . PHP_EOL;
+            }
+        }
+    }
+
+    // Test expectedEvaluations
+    if (isset($assertion["expectedEvaluations"])) {
+        $expectedEvaluations = $assertion["expectedEvaluations"];
+
+        if (isset($expectedEvaluations["flag"])) {
+            $actualEvaluation = $f->evaluateFlag($featureKey, $context);
+            foreach ($expectedEvaluations["flag"] as $key => $expectedValue) {
+                if ($actualEvaluation[$key] !== $expectedValue) {
+                    $hasError = true;
+                    $errors .= "      ✘ expectedEvaluations.flag.$key: expected " . json_encode($expectedValue) . " but received " . json_encode($evaluation[$key]) . PHP_EOL;
+                }
+            }
+        }
+
+        if (isset($expectedEvaluations["variation"])) {
+            $actualEvaluation = $f->evaluateVariation($featureKey, $context, [
+                'defaultVariationValue' => isset($assertion["defaultVariationValue"]) ? $assertion["defaultVariationValue"] : null,
+            ]);
+            foreach ($expectedEvaluations["variation"] as $key => $expectedValue) {
+                if ($actualEvaluation[$key] !== $expectedValue) {
+                    $hasError = true;
+                    $errors .= "      ✘ expectedEvaluations.variation.$key: expected " . json_encode($expectedValue) . " but received " . json_encode($evaluation[$key]) . PHP_EOL;
+                }
+            }
+        }
+
+        if (isset($expectedEvaluations["variables"])) {
+            foreach ($expectedEvaluations["variables"] as $variableKey => $expectedEvaluation) {
+                $actualEvaluation = $f->evaluateVariable($featureKey, $variableKey, $context, [
+                    'defaultVariableValue' => isset($assertion["defaultVariableValues"]) && isset($assertion["defaultVariableValues"][$variableKey])
+                        ? $assertion["defaultVariableValues"][$variableKey]
+                        : null,
+                ]);
+                foreach ($expectedEvaluation as $key => $expectedValue) {
+                    if ($actualEvaluation[$key] !== $expectedValue) {
+                        $hasError = true;
+                        $errors .= "      ✘ expectedEvaluations.variables.$variableKey.$key: expected " . json_encode($expectedValue) . " but received " . json_encode($actualValue[$key]) . PHP_EOL;
+                    }
+                }
+            }
+        }
+    }
+
+    $duration = microtime(true) - $startTime;
+
+    // children
+    if (isset($assertion["children"])) {
+        foreach ($assertion["children"] as $child) {
+            $childF = $f->spawn(isset($child["context"]) ? $child["context"] : []);
+            $childResult = testFeature($child, $featureKey, $childF, $level);
+            $duration += $childResult['duration'];
+            $hasError = $hasError || $childResult['hasError'];
+
+            if ($childResult['hasError']) {
+                $errors .= $childResult['errors'];
+            }
+        }
+    }
+
+    return [
+        'hasError' => $hasError,
+        'errors' => $errors,
+        'duration' => $duration
+    ];
+}
+
+function testSegment(array $assertion, array $segment, string $level): array {
+    $context = isset($assertion["context"]) ? $assertion["context"] : [];
+    $conditions = $segment["conditions"];
+
+    $datafile = [
+        'schemaVersion' => '2',
+        'revision' => 'tester',
+        'features' => [],
+        'segments' => []
+    ];
+
+    $datafileReader = new \Featurevisor\DatafileReader([
+        'datafile' => $datafile,
+        'logger' => \Featurevisor\createLogger([
+            'level' => $level,
+        ]),
+    ]);
+
+    $hasError = false;
+    $errors = "";
+    $startTime = microtime(true);
+
+    if (isset($assertion["expectedToMatch"])) {
+        $actual = $datafileReader->allConditionsAreMatched($conditions, $context);
+        if ($actual !== $assertion["expectedToMatch"]) {
+            $hasError = true;
+            $errors .= "      ✘ expectedToMatch: expected " . json_encode($assertion["expectedToMatch"]) . " but received " . json_encode($actual) . PHP_EOL;
+        }
+    }
+
+    $duration = (microtime(true) - $startTime) * 1000;
+    return [
+        'hasError' => $hasError,
+        'errors' => $errors,
+        'duration' => $duration
+    ];
+}
+
+function test(array $cliOptions) {
+    $featurevisorProjectPath = $cliOptions['rootDirectoryPath'];
+
+    $config = getConfig($featurevisorProjectPath);
+    $environments = $config['environments'];
+    $segmentsByKey = getSegments($featurevisorProjectPath);
+    $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, $environments);
+
+    echo PHP_EOL;
+
+    $level = getLoggerLevel($cliOptions);
+    $tests = getTests($featurevisorProjectPath, $cliOptions);
+
+    if (count($tests) === 0) {
+        echo "No tests found" . PHP_EOL;
+        return;
+    }
+
+    // Create SDK instances for each environment
+    $sdkInstancesByEnvironment = [];
+    foreach ($environments as $environment) {
+        $datafile = $datafilesByEnvironment[$environment];
+        $sdkInstancesByEnvironment[$environment] = createInstance([
+            'datafile' => $datafile,
+            'logLevel' => $level,
+            'hooks' => [
+                [
+                    'name' => 'tester-hook',
+                    'bucketValue' => function ($options) {
+                        // This will be overridden per assertion if needed
+                        return $options["bucketValue"];
+                    }
+                ]
+            ]
+        ]);
+    }
+
+    $passedTestsCount = 0;
+    $failedTestsCount = 0;
+    $passedAssertionsCount = 0;
+    $failedAssertionsCount = 0;
+
+    foreach ($tests as $test) {
+        $testKey = $test['key'];
+        $assertions = $test["assertions"];
+        $results = "";
+        $testHasError = false;
+        $testDuration = 0;
+
+        foreach ($assertions as $assertion) {
+            $testResult = [];
+
+            if (isset($test["feature"])) {
+                $environment = $assertion["environment"];
+                $f = $sdkInstancesByEnvironment[$environment];
+
+                // If "at" parameter is provided, create a new SDK instance with the specific hook
+                if (isset($assertion["at"])) {
+                    $datafile = $datafilesByEnvironment[$environment];
+                    $f = createInstance([
+                        'datafile' => $datafile,
+                        'logLevel' => $level,
+                        'hooks' => [
+                            [
+                                'name' => 'tester-hook',
+                                'bucketValue' => function ($options) use ($assertion) {
+                                    return $assertion["at"] * 1000;
+                                }
+                            ]
+                        ]
+                    ]);
+                }
+
+                $testResult = testFeature($assertion, $test["feature"], $f, $level);
+            } else if (isset($test["segment"])) {
+                $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]], $level);
+            }
+
+            $testDuration += $testResult['duration'];
+
+            if ($testResult['hasError']) {
+                $results .= "  ✘ " . $assertion["description"] . " (" . number_format($testResult['duration'] * 1000, 2) . "ms)" . PHP_EOL;
+                $results .= $testResult['errors'];
+                $testHasError = true;
+                $failedAssertionsCount++;
+            } else {
+                $results .= "  ✔ " . $assertion["description"] . " (" . number_format($testResult['duration'] * 1000, 2) . "ms)" . PHP_EOL;
+                $passedAssertionsCount++;
+            }
+        }
+
+        if ($cliOptions['onlyFailures'] === null || ($cliOptions['onlyFailures'] === true && $testHasError)) {
+            echo "\nTesting: $testKey" . " (" . number_format($testDuration * 1000, 2) . "ms)" . PHP_EOL;
+            echo $results;
+        }
+
+        if ($testHasError) {
+            $failedTestsCount++;
+        } else {
+            $passedTestsCount++;
+        }
+    }
+
+    echo PHP_EOL;
+    echo "Test specs: " . $passedTestsCount . " passed, " . $failedTestsCount . " failed" . PHP_EOL;
+    echo "Assertions: " . $passedAssertionsCount . " passed, " . $failedAssertionsCount . " failed" . PHP_EOL;
+    echo PHP_EOL;
+
+    if ($failedTestsCount > 0) {
+        exit(1);
+    }
+}
+
+/**
+ * Benchmark
+ */
+function benchmark(array $cliOptions) {
+    $featurevisorProjectPath = $cliOptions['rootDirectoryPath'];
+
+    if ($cliOptions['environment'] === null) {
+        echo "Environment is required" . PHP_EOL;
+        return;
+    }
+
+    if ($cliOptions['feature'] === null) {
+        echo "Feature is required" . PHP_EOL;
+        return;
+    }
+
+    $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
+
+    $level = getLoggerLevel($cliOptions);
+    $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
+
+    $f = createInstance([
+        'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
+        'logLevel' => $level,
+    ]);
+
+    $value = null;
+
+    if ($cliOptions['variation']) {
+        echo "Benchmarking variation for feature '$cliOptions[feature]'..." . PHP_EOL;
+    } else if ($cliOptions['variable']) {
+        echo "Benchmarking variable '$cliOptions[variable]' for feature '$cliOptions[feature]'..." . PHP_EOL;
+    } else {
+        echo "Benchmarking flag for feature '$cliOptions[feature]'..." . PHP_EOL;
+    }
+
+    echo "Against context: " . json_encode($context) . PHP_EOL;
+
+    echo "Running $cliOptions[n] times..." . PHP_EOL;
+
+    $startTime = microtime(true);
+    for ($i = 0; $i < $cliOptions['n']; $i++) {
+        if ($cliOptions['variation']) {
+            $value = $f->getVariation($cliOptions['feature'], $context);
+        } else if ($cliOptions['variable']) {
+            $value = $f->getVariable($cliOptions['feature'], $cliOptions['variable'], $context);
+        } else {
+            $value = $f->isEnabled($cliOptions['feature'], $context);
+        }
+    }
+
+    $duration = microtime(true) - $startTime;
+
+    echo "Evaluated value: " . json_encode($value) . PHP_EOL;
+    echo "Total duration: " . number_format($duration * 1000, 3) . "ms" . PHP_EOL;
+    echo "Average duration: " . number_format(($duration / $cliOptions['n']) * 1000, 3) . "ms" . PHP_EOL;
+}
+
+/**
+ * Assess distribution
+ */
+function assessDistribution(array $cliOptions) {
+    $featurevisorProjectPath = $cliOptions['rootDirectoryPath'];
+
+    if ($cliOptions['environment'] === null) {
+        echo "Environment is required" . PHP_EOL;
+        return;
+    }
+
+    if ($cliOptions['feature'] === null) {
+        echo "Feature is required" . PHP_EOL;
+        return;
+    }
+
+    $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
+    $populateUuid = $cliOptions['populateUuid'];
+
+    $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
+
+    $f = createInstance([
+        'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
+        'logLevel' => $level,
+    ]);
+
+    $value = null;
+
+    if ($cliOptions['variation']) {
+        echo "Assessing distribution for feature '$cliOptions[feature]'..." . PHP_EOL;
+    } else if ($cliOptions['variable']) {
+        echo "Assessing distribution for variable '$cliOptions[variable]' for feature '$cliOptions[feature]'..." . PHP_EOL;
+    } else {
+        echo "Assessing distribution for flag for feature '$cliOptions[feature]'..." . PHP_EOL;
+    }
+
+    echo "Against context: " . json_encode($context) . PHP_EOL;
+
+    echo "Running $cliOptions[n] times..." . PHP_EOL;
+
+    $values = [];
+
+    for ($i = 0; $i < $cliOptions['n']; $i++) {
+        if ($populateUuid) {
+            foreach ($populateUuid as $key) {
+                $context[$key] = generateUuid();
+            }
+        }
+
+        if ($cliOptions['variation']) {
+            $value = $f->getVariation($cliOptions['feature'], $context);
+        } else if ($cliOptions['variable']) {
+            $value = $f->getVariable($cliOptions['feature'], $cliOptions['variable'], $context);
+        } else {
+            $value = $f->isEnabled($cliOptions['feature'], $context);
+        }
+
+        if (!isset($values[$value])) {
+            $values[$value] = 0;
+        }
+
+        $values[$value]++;
+    }
+
+    echo "Values: " . PHP_EOL;
+
+    foreach ($values as $value => $count) {
+        echo "  - $value: $count (" . number_format(($count / $cliOptions['n']) * 100, 2) . "%)" . PHP_EOL;
+    }
+}
+
+/**
+ * Main
+ */
+if ($cliOptions['0'] === 'test') {
+    test($cliOptions);
+} else if ($cliOptions['0'] === 'benchmark') {
+    benchmark($cliOptions);
+} else if ($cliOptions['0'] === 'assess-distribution') {
+    assessDistribution($cliOptions);
+} else {
+    echo "Learn more at https://featurevisor.com/docs/sdks/php/" . PHP_EOL;
+}
