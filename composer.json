@@ -22,7 +22,6 @@
     "source": "https://github.com/featurevisor/featurevisor-php",
     "docs": "https://featurevisor.com/docs/sdks/php/"
   },
-  "version": "0.0.1",
   "minimum-stability": "dev",
   "prefer-stable": true,
   "autoload": {
