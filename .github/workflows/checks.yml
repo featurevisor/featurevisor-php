@@ -1,0 +1,33 @@
+name: Checks
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  ci:
+    name: Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # extensions: mbstring, intl, dom
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install dependencies
+        run: composer install
+
+      - name: Test
+        run: composer test
+
+      # TODO: example-1 project

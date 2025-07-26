@@ -1,52 +1,52 @@
 {
-    "name": "featurevisor/featurevisor-php",
-    "description": "Featurevisor SDK for PHP",
-    "type": "library",
-    "homepage": "https://featurevisor.com",
-    "keywords": [
-        "featurevisor",
-        "feature-flag",
-        "feature-flags",
-        "feature-toggles",
-        "feature-management"
-    ],
-    "authors": [
-        {
-            "name": "Fahad Heylaal",
-            "homepage": "https://fahad19.com",
-            "role": "lead"
-        }
-    ],
-    "support": {
-        "issues": "https://github.com/featurevisor/featurevisor-php/issues",
-        "source": "https://github.com/featurevisor/featurevisor-php",
-        "docs": "https://featurevisor.com/docs/sdks/php/"
-    },
-    "version": "0.0.1",
-    "minimum-stability": "dev",
-    "prefer-stable": true,
-    "autoload": {
-        "psr-4": {
-            "Featurevisor\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Featurevisor\\Tests\\": "tests/"
-        }
-    },
-    "require": {},
-    "require-dev": {
-        "php": "^8.0",
-        "phpunit/phpunit": "^10"
-    },
-    "bin": [
-        "featurevisor"
-    ],
-    "scripts": {
-        "test": "phpunit --bootstrap tests/bootstrap.php tests"
-    },
-    "license": [
-        "MIT"
-    ]
+  "name": "featurevisor/featurevisor-php",
+  "description": "Featurevisor SDK for PHP",
+  "type": "library",
+  "homepage": "https://featurevisor.com",
+  "keywords": [
+    "featurevisor",
+    "feature-flag",
+    "feature-flags",
+    "feature-toggles",
+    "feature-management"
+  ],
+  "authors": [
+    {
+      "name": "Fahad Heylaal",
+      "homepage": "https://fahad19.com",
+      "role": "lead"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/featurevisor/featurevisor-php/issues",
+    "source": "https://github.com/featurevisor/featurevisor-php",
+    "docs": "https://featurevisor.com/docs/sdks/php/"
+  },
+  "version": "0.0.1",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "autoload": {
+    "psr-4": {
+      "Featurevisor\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Featurevisor\\Tests\\": "tests/"
+    }
+  },
+  "require": {},
+  "require-dev": {
+    "php": "^8.0",
+    "phpunit/phpunit": "^10"
+  },
+  "bin": [
+    "featurevisor"
+  ],
+  "scripts": {
+    "test": "phpunit --bootstrap tests/bootstrap.php tests"
+  },
+  "license": [
+    "MIT"
+  ]
 }
