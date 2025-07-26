@@ -30,4 +30,12 @@ jobs:
       - name: Test
         run: composer test
 
-      # TODO: example-1 project
+      - name: Setup Featurevisor example-1 project
+        run: |
+          mkdir example-1
+          (cd example-1 && npx @featurevisor/cli@2.x init --example=1)
+          (cd example-1 && npm install)
+          (cd example-1 && npx featurevisor test)
+
+      - name: Run Featurevisor project tests against PHP SDK
+        run: (cd ./example-1 && ../featurevisor test)
