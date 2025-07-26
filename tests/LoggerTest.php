@@ -2,7 +2,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../src/Logger.php';
+use Featurevisor\Logger;
+use function Featurevisor\createLogger;
 
 class LoggerTest extends TestCase
 {
@@ -308,7 +309,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerUsesConsoleLogForDebugLevel()
     {
         ob_start();
-        defaultLogHandler('debug', 'debug message');
+        Logger::defaultLogHandler('debug', 'debug message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -318,7 +319,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerUsesConsoleInfoForInfoLevel()
     {
         ob_start();
-        defaultLogHandler('info', 'info message');
+        Logger::defaultLogHandler('info', 'info message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -328,7 +329,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerUsesConsoleWarnForWarnLevel()
     {
         ob_start();
-        defaultLogHandler('warn', 'warn message');
+        Logger::defaultLogHandler('warn', 'warn message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -338,7 +339,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerUsesConsoleErrorForErrorLevel()
     {
         ob_start();
-        defaultLogHandler('error', 'error message');
+        Logger::defaultLogHandler('error', 'error message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -348,7 +349,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerHandlesUndefinedDetails()
     {
         ob_start();
-        defaultLogHandler('info', 'message without details');
+        Logger::defaultLogHandler('info', 'message without details');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -360,7 +361,7 @@ class LoggerTest extends TestCase
         $details = ['key' => 'value'];
 
         ob_start();
-        defaultLogHandler('info', 'message with details', $details);
+        Logger::defaultLogHandler('info', 'message with details', $details);
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);

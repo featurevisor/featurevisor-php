@@ -2,16 +2,11 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../src/Instance.php';
-require_once __DIR__ . '/../src/Logger.php';
+use function Featurevisor\createInstance;
+use function Featurevisor\createLogger;
 
 class InstanceTest extends TestCase
 {
-    public function testShouldBeAFunction()
-    {
-        $this->assertTrue(function_exists('createInstance'));
-    }
-
     public function testShouldCreateInstanceWithDatafileContent()
     {
         $sdk = createInstance([

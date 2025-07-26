@@ -2,9 +2,9 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../src/DatafileReader.php';
-require_once __DIR__ . '/../src/Logger.php';
-require_once __DIR__ . '/../src/Events.php';
+use Featurevisor\Events;
+use Featurevisor\DatafileReader;
+use function Featurevisor\createLogger;
 
 class EventsTest extends TestCase
 {
@@ -17,7 +17,7 @@ class EventsTest extends TestCase
         ];
         $replace = true;
 
-        $result = getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
+        $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
 
         $this->assertEquals([
             'features' => ['feature2', 'feature3'],
@@ -37,7 +37,7 @@ class EventsTest extends TestCase
         ];
         $replace = true;
 
-        $result = getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
+        $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
 
         $this->assertEquals([
             'features' => ['feature1', 'feature2', 'feature3'],
@@ -74,7 +74,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $result = getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
+        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
         $this->assertEquals([
             'revision' => '2',
@@ -117,7 +117,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $result = getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
+        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
         $this->assertEquals([
             'revision' => '2',
@@ -158,7 +158,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $result = getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
+        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
         $this->assertEquals([
             'revision' => '2',

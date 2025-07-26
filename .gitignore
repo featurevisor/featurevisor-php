@@ -21,3 +21,5 @@ Thumbs.db
 *.log
 cache/
 .phpunit*
+
+example-1

@@ -13,7 +13,7 @@ class Logger
     public function __construct(array $options = [])
     {
         $this->level = $options['level'] ?? self::DEFAULT_LEVEL;
-        $this->handler = $options['handler'] ?? [$this, 'defaultLogHandler'];
+        $this->handler = $options['handler'] ?? [self::class, 'defaultLogHandler'];
     }
 
     public function setLevel(string $level): void
@@ -54,7 +54,7 @@ class Logger
         $this->log('error', $message, $details);
     }
 
-    public function defaultLogHandler(string $level, string $message, $details = null): void
+    public static function defaultLogHandler(string $level, string $message, $details = null): void
     {
         $method = 'log';
 
