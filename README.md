@@ -2,24 +2,43 @@
 
 This is a port of Featurevisor [Javascript SDK](https://featurevisor.com/docs/sdks/javascript/) v2.x to PHP, providing a way to evaluate feature flags, variations, and variables in your PHP applications.
 
-For more information, visit: [https://featurevisor.com](https://featurevisor.com)
+This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 projects and above.
+
+## Table of contents <!-- omit in toc -->
 
 - [Installation](#installation)
-- [SDK usage](#sdk-usage)
-  - [Create an instance](#create-an-instance)
-  - [Set context](#set-context)
-  - [Evaluate values](#evaluate-values)
-    - [Evaluate a flag](#evaluate-a-flag)
-    - [Evaluate a variation](#evaluate-a-variation)
-    - [Evaluate a variable](#evaluate-a-variable)
-    - [Evaluate all values](#evaluate-all-values)
-  - [Passing additional context](#passing-additional-context)
-  - [Set log level](#set-log-level)
-  - [Set datafile](#set-datafile)
-  - [Sticky features](#sticky-features)
-  - [Child instances](#child-instances)
-  - [Hooks](#hooks)
-  - [Close](#close)
+- [Initialization](#initialization)
+- [Evaluation types](#evaluation-types)
+- [Context](#context)
+  - [Setting initial context](#setting-initial-context)
+  - [Setting after initialization](#setting-after-initialization)
+  - [Replacing existing context](#replacing-existing-context)
+  - [Manually passing context](#manually-passing-context)
+- [Check if enabled](#check-if-enabled)
+- [Getting variation](#getting-variation)
+- [Getting variables](#getting-variables)
+  - [Type specific methods](#type-specific-methods)
+- [Getting all evaluations](#getting-all-evaluations)
+- [Sticky](#sticky)
+  - [Initialize with sticky](#initialize-with-sticky)
+  - [Set sticky afterwards](#set-sticky-afterwards)
+- [Setting datafile](#setting-datafile)
+  - [Updating datafile](#updating-datafile)
+  - [Interval-based update](#interval-based-update)
+- [Logging](#logging)
+  - [Levels](#levels)
+  - [Customizing levels](#customizing-levels)
+  - [Handler](#handler)
+- [Events](#events)
+  - [`datafile_set`](#datafile_set)
+  - [`context_set`](#context_set)
+  - [`sticky_set`](#sticky_set)
+- [Evaluation details](#evaluation-details)
+- [Hooks](#hooks)
+  - [Defining a hook](#defining-a-hook)
+  - [Registering hooks](#registering-hooks)
+- [Child instance](#child-instance)
+- [Close](#close)
 - [CLI usage](#cli-usage)
   - [Test](#test)
   - [Benchmark](#benchmark)
@@ -28,192 +47,598 @@ For more information, visit: [https://featurevisor.com](https://featurevisor.com
 
 ## Installation
 
-In your PHP application:
+In your PHP application, install the SDK using [Composer](https://getcomposer.org/):
 
-```bash
+```
 $ composer require featurevisor/featurevisor-php
 ```
 
-## SDK usage
+## Initialization
 
-### Create an instance
+The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/building-datafiles/) content directly:
 
 ```php
 <?php
 
 use function Featurevisor\createInstance;
 
-$DATAFILE_CONTENT = "...";
+$datafileUrl = "https://cdn.yoursite.com/datafile.json";
+
+$datafileContent = file_get_contents($datafileUrl);
+$datafileContent = json_decode($datafileContent, true);
 
 $f = createInstance([
-    "datafile" => $DATAFILE_CONTENT,
+  "datafile" => $datafileContent
 ]);
 ```
 
-Learn more about Featurevisor datafiles [here](https://featurevisor.com/docs/building-datafiles/).
+## Evaluation types
 
-### Set context
+We can evaluate 3 types of values against a particular [feature](https://featurevisor.com/docs/features/):
+
+- [**Flag**](#check-if-enabled) (`boolean`): whether the feature is enabled or not
+- [**Variation**](#getting-variation) (`string`): the variation of the feature (if any)
+- [**Variables**](#getting-variables): variable values of the feature (if any)
+
+These evaluations are run against the provided context.
+
+## Context
+
+Contexts are [attribute](https://featurevisor.com/docs/attributes) values that we pass to SDK for evaluating [features](https://featurevisor.com/docs/features) against.
+
+Think of the conditions that you define in your [segments](https://featurevisor.com/docs/segments/), which are used in your feature's [rules](https://featurevisor.com/docs/features/#rules).
+
+They are plain objects:
+
+```php
+$context = [
+  "userId" => "123",
+  "country" => "nl",
+  // ...other attributes
+];
+```
+
+Context can be passed to SDK instance in various different ways, depending on your needs:
+
+### Setting initial context
+
+You can set context at the time of initialization:
+
+```php
+use function Featurevisor\createInstance;
+
+$f = createInstance([
+  "context" => [
+    "deviceId" => "123",
+    "country" => "nl",
+  ],
+]);
+```
+
+This is useful for values that don't change too frequently and available at the time of application startup.
+
+### Setting after initialization
+
+You can also set more context after the SDK has been initialized:
 
 ```php
 $f->setContext([
-    "appVersion" => "1.0.0",
-    "userId"     => "123",
-    "deviceId"   => "456",
-    "country"    => "nl",
+  "userId" => "123",
+  "country" => "nl",
 ]);
 ```
 
-Context keeps getting accumulated in the SDK instance as you set new ones.
+This will merge the new context with the existing one (if already set).
 
-To replace existing context, you can pass the second argument as `true`:
+### Replacing existing context
+
+If you wish to fully replace the existing context, you can pass `true` in second argument:
 
 ```php
-$f->setContext([], true)
+$f->setContext(
+  [
+    "deviceId" => "123",
+    "userId" => "234",
+    "country" => "nl",
+    "browser" => "chrome",
+  ],
+  true // replace existing context
+);
 ```
 
-### Evaluate values
+### Manually passing context
 
-#### Evaluate a flag
+You can optionally pass additional context manually for each and every evaluation separately, without needing to set it to the SDK instance affecting all evaluations:
 
 ```php
-$isEnabled = $f->isEnabled("myFeatureKey");
+$context = [
+  "userId" => "123",
+  "country" => "nl",
+];
+
+$isEnabled = $f->isEnabled('my_feature', $context);
+$variation = $f->getVariation('my_feature', $context);
+$variableValue = $f->getVariable('my_feature', 'my_variable', $context);
 ```
 
-#### Evaluate a variation
+When manually passing context, it will merge with existing context set to the SDK instance before evaluating the specific value.
+
+Further details for each evaluation types are described below.
+
+## Check if enabled
+
+Once the SDK is initialized, you can check if a feature is enabled or not:
 
 ```php
-$variation = $f->getVariation("myFeatureKey");
+$featureKey = 'my_feature';
+
+$isEnabled = $f->isEnabled($featureKey);
+
+if ($isEnabled) {
+  // do something
+}
 ```
 
-#### Evaluate a variable
+You can also pass additional context per evaluation:
 
 ```php
-$variable = $f->getVariable("myFeatureKey", "variableKey");
-
-// type specific methods
-$variable = $f->getVariableBoolean("myFeatureKey", "variableKey");
-$variable = $f->getVariableString("myFeatureKey", "variableKey");
-$variable = $f->getVariableInteger("myFeatureKey", "variableKey");
-$variable = $f->getVariableDouble("myFeatureKey", "variableKey");
-$variable = $f->getVariableArray("myFeatureKey", "variableKey");
-$variable = $f->getVariableObject("myFeatureKey", "variableKey");
-$variable = $f->getVariableJSON("myFeatureKey", "variableKey");
+$isEnabled = $f->isEnabled($featureKey, [
+  // ...additional context
+]);
 ```
 
-#### Evaluate all values
+## Getting variation
+
+If your feature has any [variations](https://featurevisor.com/docs/features/#variations) defined, you can evaluate them as follows:
 
 ```php
-$allEvaluations = $f->getAllEvaluations();
+$featureKey = 'my_feature';
 
+$variation = $f->getVariation($featureKey);
+
+if ($variation === "treatment") {
+  // do something for treatment variation
+} else {
+  // handle default/control variation
+}
+```
+
+Additional context per evaluation can also be passed:
+
+```php
+$variation = $f->getVariation($featureKey, [
+  // ...additional context
+]);
+```
+
+## Getting variables
+
+Your features may also include [variables](https://featurevisor.com/docs/features/#variables), which can be evaluated as follows:
+
+```php
+$variableKey = 'bgColor';
+
+$bgColorValue = $f->getVariable($featureKey, $variableKey);
+```
+
+Additional context per evaluation can also be passed:
+
+```php
+$bgColorValue = $f->getVariable($featureKey, $variableKey, [
+  // ...additional context
+]);
+```
+
+### Type specific methods
+
+Next to generic `getVariable()` methods, there are also type specific methods available for convenience:
+
+```php
+$f->getVariableBoolean($featureKey, $variableKey, $context = []);
+$f->getVariableString($featureKey, $variableKey, $context = []);
+$f->getVariableInteger($featureKey, $variableKey, $context = []);
+$f->getVariableDouble($featureKey, $variableKey, $context = []);
+$f->getVariableArray($featureKey, $variableKey, $context = []);
+$f->getVariableObject($featureKey, $variableKey, $context = []);
+$f->getVariableJSON($featureKey, $variableKey, $context = []);
+```
+
+## Getting all evaluations
+
+You can get evaluations of all features available in the SDK instance:
+
+```php
+$allEvaluations = $f->getAllEvaluations($context = []);
+
+print_r($allEvaluations);
 // [
-//     "myFeatureKey" => [
-//         "enabled" => true,
-//         "variation" => "variationA",
-//         "variables" => [
-//             "variableKey" => "value",
-//             // ...
-//         ],
+//   myFeature: [
+//     enabled: true,
+//     variation: "control",
+//     variables: [
+//       myVariableKey: "myVariableValue",
 //     ],
+//   ],
 //
-//     "anotherFeatureKey" => [ ... ],
-//
-//     // ...
+//   anotherFeature: [
+//     enabled: true,
+//     variation: "treatment",
+//   ]
 // ]
 ```
 
-### Passing additional context
+This is handy especially when you want to pass all evaluations from a backend application to the frontend.
 
-Each evaluation method accepts an optional argument for passing additional context specific to that evaluation:
+## Sticky
+
+For the lifecycle of the SDK instance in your application, you can set some features with sticky values, meaning that they will not be evaluated against the fetched [datafile](https://featurevisor.com/docs/building-datafiles/):
+
+### Initialize with sticky
 
 ```php
-$isEnabled = $f->isEnabled("myFeatureKey", [
-    "browser" => "chrome",
+use function Featurevisor\createInstance;
+
+$f = createInstance([
+  "sticky" => [
+    "myFeatureKey" => [
+      "enabled" => true,
+
+      // optional
+      "variation" => 'treatment',
+      "variables" => [
+        "myVariableKey" => 'myVariableValue',
+      ],
+    ],
+
+    "anotherFeatureKey" => [
+      "enabled" => false,
+    ],
+  ],
 ]);
 ```
 
-### Set log level
+Once initialized with sticky features, the SDK will look for values there first before evaluating the targeting conditions and going through the bucketing process.
+
+### Set sticky afterwards
+
+You can also set sticky features after the SDK is initialized:
+
+```php
+$f->setSticky(
+  [
+    "myFeatureKey" => [
+      "enabled" => true,
+      "variation" => 'treatment',
+      "variables" => [
+        "myVariableKey" => 'myVariableValue',
+      ],
+    ],
+    "anotherFeatureKey" => [
+      "enabled" => false,
+    ],
+  ],
+
+  // replace existing sticky features (false by default)
+  true
+]);
+```
+
+## Setting datafile
+
+You may also initialize the SDK without passing `datafile`, and set it later on:
+
+```php
+$f->setDatafile($datafileContent);
+```
+
+### Updating datafile
+
+You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile-set) event that you can listen and react to accordingly.
+
+The triggers for setting the datafile again can be:
+
+- periodic updates based on an interval (like every 5 minutes), or
+- reacting to:
+  - a specific event in your application (like a user action), or
+  - an event served via websocket or server-sent events (SSE)
+
+### Interval-based update
+
+Here's an example of using interval-based update:
+
+@TODO
+
+## Logging
+
+By default, Featurevisor SDKs will print out logs to the console for `info` level and above.
+
+### Levels
+
+These are all the available log levels:
+
+- `error`
+- `warn`
+- `info`
+- `debug`
+
+### Customizing levels
+
+If you choose `debug` level to make the logs more verbose, you can set it at the time of SDK initialization.
+
+Setting `debug` level will print out all logs, including `info`, `warn`, and `error` levels.
+
+```php
+use function Featurevisor\createInstance;
+use function Featurevisor\createLogger;
+
+$f = createInstance([
+  "logger" => createLogger([
+    "level" => "debug",
+  ]),
+]);
+```
+
+Alternatively, you can also set `logLevel` directly:
+
+```php
+$f = createInstance([
+  "logLevel" => "debug",
+]);
+```
+
+You can also set log level from SDK instance afterwards:
 
 ```php
 $f->setLogLevel("debug");
 ```
 
-Accepted values:
+### Handler
 
--   `debug`
--   `info`
--   `warn`
--   `error`
-
-### Set datafile
-
-You may want to update the datafile at runtime after initializing the SDK instance:
+You can also pass your own log handler, if you do not wish to print the logs to the console:
 
 ```php
-$NEW_DATAFILE_CONTENT = "...";
+use function Featurevisor\createInstance;
+use function Featurevisor\createLogger;
 
-$f->setDatafile($NEW_DATAFILE_CONTENT);
-```
-
-### Sticky features
-
-Setting sticky features allow you to override the configuration as present in the datafile:
-
-```php
-$f->setSticky([
-    "myFeatureKey" => [
-        "enabled" => true,
-        "variation" => "variationA",
-        "variables" => [
-            "variableKey" => "value",
-        ],
-    ],
+$f = createInstance([
+  "logger" => createLogger([
+    "level" => "info",
+    "handler" => function ($level, $message, $details) {
+      // do something with the log
+    },
+  ]),
 ]);
 ```
 
-To clear sticky features, you can use:
+Further log levels like `info` and `debug` will help you understand how the feature variations and variables are evaluated in the runtime against given context.
+
+## Events
+
+Featurevisor SDK implements a simple event emitter that allows you to listen to events that happen in the runtime.
+
+You can listen to these events that can occur at various stages in your application:
+
+@TODO: verify these events
+
+### `datafile_set`
 
 ```php
-$f->setSticky([], true);
+$unsubscribe = $f->on('datafile_set', function ($event) {
+  $revision = $event['revision']; // new revision
+  $previousRevision = $event['previousRevision'];
+  $revisionChanged = $event['revisionChanged']; // true if revision has changed
+
+  // list of feature keys that have new updates,
+  // and you should re-evaluate them
+  $features = $event['features'];
+
+  // handle here
+});
+
+// stop listening to the event
+$unsubscribe();
 ```
 
-The second argument `true` indicates to replace the previously set stick features with new empty array.
+The `features` array will contain keys of features that have either been:
 
-### Child instances
+- added, or
+- updated, or
+- removed
+
+compared to the previous datafile content that existed in the SDK instance.
+
+### `context_set`
 
 ```php
-$childF = $f->spawn($optionalChildContext);
+$unsubscribe = $f->on('context_set', function ($event) {
+  $replaced = $event['replaced']; // true if context was replaced
+  $context = $event['context']; // the new context
 
-$childF->setContext([
-    "userId" => "789",
+  echo "Context set";
+});
+```
+
+### `sticky_set`
+
+```php
+$unsubscribe = $f->on('sticky_set', function ($event) {
+  $replaced = $event['replaced']; // true if sticky features got replaced
+  $features = $event['features']; // list of all affected feature keys
+
+  echo "Sticky features set";
+});
+```
+
+## Evaluation details
+
+Besides logging with debug level enabled, you can also get more details about how the feature variations and variables are evaluated in the runtime against given context:
+
+```php
+// flag
+$evaluation = $f->evaluateFlag($featureKey, $context = []);
+
+// variation
+$evaluation = $f->evaluateVariation($featureKey, $context = []);
+
+// variable
+$evaluation = $f->evaluateVariable($featureKey, $variableKey, $context = []);
+```
+
+The returned object will always contain the following properties:
+
+- `featureKey`: the feature key
+- `reason`: the reason how the value was evaluated
+
+And optionally these properties depending on whether you are evaluating a feature variation or a variable:
+
+- `bucketValue`: the bucket value between 0 and 100,000
+- `ruleKey`: the rule key
+- `error`: the error object
+- `enabled`: if feature itself is enabled or not
+- `variation`: the variation object
+- `variationValue`: the variation value
+- `variableKey`: the variable key
+- `variableValue`: the variable value
+- `variableSchema`: the variable schema
+
+## Hooks
+
+Hooks allow you to intercept the evaluation process and customize it further as per your needs.
+
+### Defining a hook
+
+A hook is a simple object with a unique required `name` and optional functions:
+
+```php
+$myCustomHook = [
+  // only required property
+  'name' => 'my-custom-hook',
+
+  // rest of the properties below are all optional per hook
+
+  // before evaluation
+  'before' => function (options) {
+    $type = $options['type']; // `feature` | `variation` | `variable`
+    $featureKey = $options['featureKey'];
+    $variableKey = $options['variableKey']; // if type is `variable`
+    $context = $options['context'];
+
+    // update context before evaluation
+    $options['context'] = array_merge($options['context'], [
+      'someAdditionalAttribute' => 'value',
+    ]);
+
+    return $options;
+  },
+
+  // after evaluation
+  'after' => function ($evaluation, $options) {
+    $reason = $evaluation['reason']; // `error` | `feature_not_found` | `variable_not_found` | ...
+
+    if ($reason === "error") {
+      // log error
+
+      return;
+    }
+  },
+
+  // configure bucket key
+  'bucketKey' => function ($options) {
+    $featureKey = $options['featureKey'];
+    $context = $options['context'];
+    $bucketBy = $options['bucketBy'];
+    $bucketKey = $options['bucketKey']; // default bucket key
+
+    // return custom bucket key
+    return $bucketKey;
+  },
+
+  // configure bucket value (between 0 and 100,000)
+  'bucketValue' => function ($options) {
+    $featureKey = $options['featureKey'];
+    $context = $options['context'];
+    $bucketKey = $options['bucketKey'];
+    $bucketValue = $options['bucketValue']; // default bucket value
+
+    // return custom bucket value
+    return $bucketValue;
+  },
+];
+```
+
+### Registering hooks
+
+You can register hooks at the time of SDK initialization:
+
+```php
+use function Featurevisor\createInstance;
+
+$f = createInstance([
+  'hooks' => [
+    $myCustomHook
+  ],
 ]);
-
-$isEnabled = $childF->isEnabled("myFeatureKey");
 ```
 
-Child instances inherit the context and configuration from the primary instance, but you can set a different context for them.
-
-They share similar methods as the primary instance for evaluations:
+Or after initialization:
 
 ```php
-$childF->isEnabled("myFeatureKey");
-$childF->getVariation("myFeatureKey");
-$childF->getVariable("myFeatureKey", "variableKey");
-$childF->getAllEvaluations();
+$removeHook = $f->addHook($myCustomHook);
+
+// $removeHook()
 ```
 
-### Hooks
+## Child instance
 
-TODO
+When dealing with purely client-side applications, it is understandable that there is only one user involved, like in browser or mobile applications.
 
-### Close
+But when using Featurevisor SDK in server-side applications, where a single server instance can handle multiple user requests simultaneously, it is important to isolate the context for each request.
 
-To remove any forgotten listeners, both the primary and child instances allow a `close` method:
+That's where child instances come in handy:
+
+```php
+$childF = $f->spawn([
+  // user or request specific context
+  'userId' => '123',
+]);
+```
+
+Now you can pass the child instance where your individual request is being handled, and you can continue to evaluate features targeting that specific user alone:
+
+```php
+$isEnabled = $childF->isEnabled('my_feature');
+$variation = $childF->getVariation('my_feature');
+$variableValue = $childF->getVariable('my_feature', 'my_variable');
+```
+
+Similar to parent SDK, child instances also support several additional methods:
+
+- `setContext`
+- `setSticky`
+- `isEnabled`
+- `getVariation`
+- `getVariable`
+- `getVariableBoolean`
+- `getVariableString`
+- `getVariableInteger`
+- `getVariableDouble`
+- `getVariableArray`
+- `getVariableObject`
+- `getVariableJSON`
+- `getAllEvaluations`
+- `on`
+- `close`
+
+## Close
+
+Both primary and child instances support a `.close()` method, that removes forgotten event listeners (via `on` method) and cleans up any potential memory leaks.
 
 ```php
 $f->close();
 ```
 
 ## CLI usage
+
 
 This package also provides a CLI tool for running your Featurevisor project's test specs and benchmarking against this PHP SDK:
 
@@ -238,11 +663,15 @@ $ vendor/bin/featurevisor test \
 
 ### Benchmark
 
-TODO
+See: https://featurevisor.com/docs/cli/#benchmarking
+
+@TODO
 
 ### Assess distribution
 
-TODO
+See: https://featurevisor.com/docs/cli/#assess-distribution
+
+@TODO
 
 ## License
 
