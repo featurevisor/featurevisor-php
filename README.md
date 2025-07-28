@@ -651,14 +651,14 @@ This package also provides a CLI tool for running your Featurevisor project's te
 See: https://featurevisor.com/docs/testing/
 
 ```
-$ vendor/bin/featurevisor test --projectDirectoryPath="path/to/your/featurevisor/project"
+$ vendor/bin/featurevisor test --projectDirectoryPath="/absolute/path/to/your/featurevisor/project"
 ```
 
 Additional options that are available:
 
 ```
 $ vendor/bin/featurevisor test \
-    --projectDirectoryPath="path/to/your/featurevisor/project" \
+    --projectDirectoryPath="/absolute/path/to/your/featurevisor/project" \
     --quiet|verbose \
     --onlyFailures \
     --keyPattern="myFeatureKey" \
@@ -669,13 +669,30 @@ $ vendor/bin/featurevisor test \
 
 See: https://featurevisor.com/docs/cli/#benchmarking
 
-@TODO
+```
+$ vendor/bin/featurevisor benchmark \
+    --projectDirectoryPath="/absolute/path/to/your/featurevisor/project" \
+    --environment="production" \
+    --feature="myFeatureKey" \
+    --context='{"country": "nl"}' \
+    --n=1000
+```
 
 ### Assess distribution
 
 See: https://featurevisor.com/docs/cli/#assess-distribution
 
-@TODO
+```
+$ vendor/bin/featurevisor assess-distribution \
+    --projectDirectoryPath="/absolute/path/to/your/featurevisor/project" \
+    --environment=production \
+    --feature=foo \
+    --variation \
+    --context='{"country": "nl"}' \
+    --populateUuid=userId \
+    --populateUuid=deviceId \
+    --n=1000
+```
 
 ## Development of this package
 
