@@ -43,6 +43,10 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Test](#test)
   - [Benchmark](#benchmark)
   - [Assess distribution](#assess-distribution)
+- [Development of this package](#development-of-this-package)
+  - [Setting up](#setting-up)
+  - [Running tests](#running-tests)
+  - [Releasing](#releasing)
 - [License](#license)
 
 ## Installation
@@ -672,6 +676,28 @@ See: https://featurevisor.com/docs/cli/#benchmarking
 See: https://featurevisor.com/docs/cli/#assess-distribution
 
 @TODO
+
+## Development of this package
+
+### Setting up
+
+Clone the repository, and install the dependencies using [Composer](https://getcomposer.org/):
+
+```
+$ composer install
+```
+
+### Running tests
+
+```
+$ composer test
+```
+
+### Releasing
+
+- Manually create a new release on [GitHub](https://github.com/featurevisor/featurevisor-php/releases)
+- Tag it with a prefix of `v`, like `v1.0.0`
+- GitHub Actions is set up to automatically notify [Packagist](https://packagist.org/packages/featurevisor/featurevisor-php) about the new release
 
 ## License
 
