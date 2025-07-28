@@ -48,7 +48,6 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Running tests](#running-tests)
   - [Releasing](#releasing)
 - [License](#license)
-
 ## Installation
 
 In your PHP application, install the SDK using [Composer](https://getcomposer.org/):
@@ -643,12 +642,11 @@ $f->close();
 
 ## CLI usage
 
-
 This package also provides a CLI tool for running your Featurevisor project's test specs and benchmarking against this PHP SDK:
 
 ### Test
 
-See: https://featurevisor.com/docs/testing/
+Learn more about testing [here](https://featurevisor.com/docs/testing/).
 
 ```
 $ vendor/bin/featurevisor test --projectDirectoryPath="/absolute/path/to/your/featurevisor/project"
@@ -667,7 +665,7 @@ $ vendor/bin/featurevisor test \
 
 ### Benchmark
 
-See: https://featurevisor.com/docs/cli/#benchmarking
+Learn more about benchmarking [here](https://featurevisor.com/docs/cli/#benchmarking).
 
 ```
 $ vendor/bin/featurevisor benchmark \
@@ -680,7 +678,7 @@ $ vendor/bin/featurevisor benchmark \
 
 ### Assess distribution
 
-See: https://featurevisor.com/docs/cli/#assess-distribution
+Learn more about assessing distribution [here](https://featurevisor.com/docs/cli/#assess-distribution).
 
 ```
 $ vendor/bin/featurevisor assess-distribution \
