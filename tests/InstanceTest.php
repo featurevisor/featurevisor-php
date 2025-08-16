@@ -1,5 +1,7 @@
 <?php
 
+namespace Featurevisor\Tests;
+
 use PHPUnit\Framework\TestCase;
 
 use function Featurevisor\createInstance;

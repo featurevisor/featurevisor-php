@@ -29,7 +29,7 @@
       "Featurevisor\\": "src/"
     },
     "files": [
-      "src/index.php"
+      "src/functions.php"
     ]
   },
   "autoload-dev": {
@@ -46,7 +46,7 @@
     "featurevisor"
   ],
   "scripts": {
-    "test": "phpunit --bootstrap tests/bootstrap.php tests"
+    "test": "phpunit tests"
   },
   "license": [
     "MIT"

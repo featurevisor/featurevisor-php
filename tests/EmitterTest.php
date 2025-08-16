@@ -1,7 +1,8 @@
 <?php
 
+namespace Featurevisor\Tests;
+
 use PHPUnit\Framework\TestCase;
-require_once __DIR__ . '/../src/Emitter.php';
 
 use Featurevisor\Emitter;
 

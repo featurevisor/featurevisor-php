@@ -1,16 +1,13 @@
 <?php
 
+namespace Featurevisor\Tests;
+
 use PHPUnit\Framework\TestCase;
-require_once __DIR__ . '/../src/DatafileReader.php';
-require_once __DIR__ . '/../src/Logger.php';
 
 use Featurevisor\DatafileReader;
 use function Featurevisor\createLogger;
 
 class DatafileReaderTest extends TestCase {
-    public function testDatafileReaderIsFunction() {
-        $this->assertTrue(class_exists(DatafileReader::class));
-    }
 
     public function testV2DatafileSchemaEntities() {
         $datafileJson = [
