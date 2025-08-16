@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - '**'
+  pull_request:
+    types:
+      - opened
+      - synchronize # when a PR is updated
+      - reopened # when a PR is reopened
+      - ready_for_review # when a PR is ready for review
+      - review_requested # when a PR is requested for review
 
 jobs:
   ci:
