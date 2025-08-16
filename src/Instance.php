@@ -2,10 +2,13 @@
 
 namespace Featurevisor;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 class Instance
 {
     private array $context = [];
-    private Logger $logger;
+    private LoggerInterface $logger;
     private ?array $sticky = null;
     private DatafileReader $datafileReader;
     private HooksManager $hooksManager;
@@ -15,9 +18,7 @@ class Instance
     {
         // from options
         $this->context = $options['context'] ?? [];
-        $this->logger = $options['logger'] ?? createLogger([
-            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL
-        ]);
+        $this->logger = $options['logger'] ?? new NullLogger();
         $this->hooksManager = new HooksManager([
             'hooks' => $options['hooks'] ?? [],
             'logger' => $this->logger
@@ -49,11 +50,6 @@ class Instance
         $this->logger->info('Featurevisor SDK initialized');
     }
 
-    public function setLogLevel(string $level): void
-    {
-        $this->logger->setLevel($level);
-    }
-
     public function setDatafile($datafile): void
     {
         try {
@@ -69,7 +65,7 @@ class Instance
             $this->logger->info('datafile set', $details);
             $this->emitter->trigger('datafile_set', $details);
         } catch (\Exception $e) {
-            $this->logger->error('could not parse datafile', ['error' => $e->getMessage()]);
+            $this->logger->error('could not parse datafile', ['error' => $e->getMessage(), 'exception' => $e]);;
         }
     }
 
@@ -211,7 +207,9 @@ class Instance
 
             return null;
         } catch (\Exception $e) {
-            $this->logger->error('getVariation', [
+            $this->logger->error($e->getMessage(), [
+                'exception' => $e,
+                'action' => 'getVariation',
                 'featureKey' => $featureKey,
                 'error' => $e->getMessage()
             ]);
@@ -251,10 +249,11 @@ class Instance
             }
             return null;
         } catch (\Exception $e) {
-            $this->logger->error('getVariable', [
+            $this->logger->error($e->getMessage(), [
+                'exception' => $e,
+                'action' => 'getVariable',
                 'featureKey' => $featureKey,
                 'variableKey' => $variableKey,
-                'error' => $e->getMessage()
             ]);
             return null;
         }
