@@ -5,30 +5,11 @@ namespace Featurevisor\Tests;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Logger;
+use Psr\Log\LogLevel;
 use function Featurevisor\createLogger;
 
 class LoggerTest extends TestCase
 {
-    private $originalOutput;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // Capture original output functions
-        $this->originalOutput = [
-            'log' => function_exists('console_log') ? 'console_log' : null,
-            'info' => function_exists('console_info') ? 'console_info' : null,
-            'warn' => function_exists('console_warn') ? 'console_warn' : null,
-            'error' => function_exists('console_error') ? 'console_error' : null,
-        ];
-    }
-
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-        // Restore original output functions if needed
-    }
-
     public function testCreateLoggerWithDefaultOptions()
     {
         $logger = createLogger();
@@ -48,7 +29,7 @@ class LoggerTest extends TestCase
             $customHandlerCalled = true;
             $this->assertEquals('info', $level);
             $this->assertEquals('test message', $message);
-            $this->assertNull($details);
+            $this->assertSame([], $details);
         };
 
         $logger = createLogger(['handler' => $customHandler]);
@@ -104,7 +85,7 @@ class LoggerTest extends TestCase
             $customHandlerCalled = true;
             $this->assertEquals('info', $level);
             $this->assertEquals('test message', $message);
-            $this->assertNull($details);
+            $this->assertSame([], $details);
         };
 
         $logger = new Logger(['handler' => $customHandler]);
@@ -134,7 +115,7 @@ class LoggerTest extends TestCase
 
     public function testLogErrorMessagesAtAllLevels()
     {
-        $levels = ['debug', 'info', 'warn', 'error'];
+        $levels = ['debug', 'info', 'warning', 'error'];
 
         foreach ($levels as $level) {
             $logger = new Logger(['level' => $level]);
@@ -150,11 +131,12 @@ class LoggerTest extends TestCase
 
     public function testLogWarnMessagesAtWarnLevelAndAbove()
     {
-        $logger = new Logger(['level' => 'warn']);
+        $logger = new Logger(['level' => LogLevel::WARNING]);
 
         ob_start();
-        $logger->warn('warn message');
+        $logger->warning('warn message');
         $output = ob_get_clean();
+        var_dump($output);
         $this->assertStringContainsString('[Featurevisor]', $output);
         $this->assertStringContainsString('warn message', $output);
 
@@ -167,7 +149,7 @@ class LoggerTest extends TestCase
 
     public function testNotLogInfoMessagesAtWarnLevel()
     {
-        $logger = new Logger(['level' => 'warn']);
+        $logger = new Logger(['level' => LogLevel::WARNING]);
 
         ob_start();
         $logger->info('info message');
@@ -204,7 +186,7 @@ class LoggerTest extends TestCase
         $this->assertStringContainsString('info message', $output);
 
         ob_start();
-        $logger->warn('warn message');
+        $logger->warning('warn message');
         $output = ob_get_clean();
         $this->assertStringContainsString('[Featurevisor]', $output);
         $this->assertStringContainsString('warn message', $output);
@@ -245,7 +227,7 @@ class LoggerTest extends TestCase
         $logger = new Logger(['level' => 'debug']);
 
         ob_start();
-        $logger->warn('warn message');
+        $logger->warning('warn message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);
@@ -302,7 +284,7 @@ class LoggerTest extends TestCase
             $customHandlerCalled = true;
         };
 
-        $logger = new Logger(['handler' => $customHandler, 'level' => 'warn']);
+        $logger = new Logger(['handler' => $customHandler, 'level' => LogLevel::WARNING]);
 
         $logger->log('debug', 'debug message');
         $this->assertFalse($customHandlerCalled);
@@ -331,7 +313,7 @@ class LoggerTest extends TestCase
     public function testDefaultLogHandlerUsesConsoleWarnForWarnLevel()
     {
         ob_start();
-        Logger::defaultLogHandler('warn', 'warn message');
+        Logger::defaultLogHandler(LogLevel::WARNING, 'warn message');
         $output = ob_get_clean();
 
         $this->assertStringContainsString('[Featurevisor]', $output);

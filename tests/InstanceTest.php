@@ -4,6 +4,7 @@ namespace Featurevisor\Tests;
 
 use PHPUnit\Framework\TestCase;
 
+use Psr\Log\LogLevel;
 use function Featurevisor\createInstance;
 use function Featurevisor\createLogger;
 
@@ -564,7 +565,7 @@ class InstanceTest extends TestCase
             ],
             'logger' => createLogger([
                 'handler' => function($level, $message) use (&$deprecatedCount) {
-                    if ($level === 'warn' && strpos($message, 'is deprecated') !== false) {
+                    if ($level === LogLevel::WARNING && strpos($message, 'is deprecated') !== false) {
                         $deprecatedCount += 1;
                     }
                 },

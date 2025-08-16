@@ -2,13 +2,15 @@
 
 namespace Featurevisor;
 
+use Psr\Log\LoggerInterface;
+
 class DatafileReader
 {
     private string $schemaVersion;
     private string $revision;
     private array $segments;
     private array $features;
-    private Logger $logger;
+    private LoggerInterface $logger;
     private array $regexCache;
 
     public function __construct(array $options)
@@ -152,12 +154,10 @@ class DatafileReader
                 try {
                     return Conditions::conditionIsMatched($conditions, $context, $getRegex);
                 } catch (\Exception $e) {
-                    $this->logger->warn($e->getMessage(), [
-                        'error' => $e,
-                        'details' => [
-                            'condition' => $conditions,
-                            'context' => $context,
-                        ],
+                    $this->logger->warning($e->getMessage(), [
+                        'exception' => $e,
+                        'condition' => $conditions,
+                        'context' => $context,
                     ]);
                     return false;
                 }

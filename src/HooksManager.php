@@ -2,10 +2,12 @@
 
 namespace Featurevisor;
 
+use Psr\Log\LoggerInterface;
+
 class HooksManager
 {
     private array $hooks = [];
-    private Logger $logger;
+    private LoggerInterface $logger;
 
     public function __construct(array $options)
     {

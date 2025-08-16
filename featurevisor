@@ -3,6 +3,7 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
+use Psr\Log\LogLevel;
 use function Featurevisor\createInstance;
 
 /**
@@ -93,11 +94,11 @@ function buildDatafiles(string $featurevisorProjectPath, array $environments): a
 }
 
 function getLoggerLevel(array $cliOptions): string {
-    $level = 'warn';
+    $level = LogLevel::WARNING;
     if ($cliOptions['verbose'] === true) {
-        $level = 'debug';
+        $level = LogLevel::DEBUG;
     } else if ($cliOptions['quiet'] === true) {
-        $level = 'error';
+        $level = LogLevel::ERROR;
     }
     return $level;
 }

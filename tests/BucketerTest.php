@@ -5,6 +5,7 @@ namespace Featurevisor\Tests;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Bucketer;
+use Psr\Log\LogLevel;
 use function Featurevisor\createLogger;
 
 class BucketerTest extends TestCase {
@@ -42,7 +43,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = 'userId';
         $context = ['userId' => '123', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -56,7 +57,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = 'userId';
         $context = ['browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -70,7 +71,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = ['organizationId', 'userId'];
         $context = ['organizationId' => '123', 'userId' => '234', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -84,7 +85,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = ['organizationId', 'userId'];
         $context = ['organizationId' => '123', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -102,7 +103,7 @@ class BucketerTest extends TestCase {
             'user' => ['id' => '234'],
             'browser' => 'chrome',
         ];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -120,7 +121,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = ['or' => ['userId', 'deviceId']];
         $context = ['deviceId' => 'deviceIdHere', 'userId' => '234', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -134,7 +135,7 @@ class BucketerTest extends TestCase {
         $featureKey = 'test-feature';
         $bucketBy = ['or' => ['userId', 'deviceId']];
         $context = ['deviceId' => 'deviceIdHere', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,

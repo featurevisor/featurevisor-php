@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Psr\Log\LoggerInterface;
+
 class EvaluateNotFound
 {
     public static function evaluate(array $options): array
@@ -9,6 +11,7 @@ class EvaluateNotFound
         $type = $options['type'];
         $featureKey = $options['featureKey'];
         $variableKey = $options['variableKey'] ?? null;
+        /** @var LoggerInterface $logger */
         $logger = $options['logger'];
         $datafileReader = $options['datafileReader'];
 
@@ -24,7 +27,7 @@ class EvaluateNotFound
                 'reason' => Evaluation::FEATURE_NOT_FOUND
             ];
 
-            $logger->warn('feature not found', $result['evaluation']);
+            $logger->warning('feature not found', $result['evaluation']);
 
             return $result;
         }
@@ -33,7 +36,7 @@ class EvaluateNotFound
 
         // feature: deprecated
         if ($type === 'flag' && ($feature['deprecated'] ?? false)) {
-            $logger->warn('feature is deprecated', ['featureKey' => $featureKey]);
+            $logger->warning('feature is deprecated', ['featureKey' => $featureKey]);
         }
 
         // variableSchema
@@ -53,15 +56,14 @@ class EvaluateNotFound
                     'variableKey' => $variableKey
                 ];
 
-                $logger->warn('variable schema not found', $result['evaluation']);
+                $logger->warning('variable schema not found', $result['evaluation']);
 
                 return $result;
             }
 
             $result['variableSchema'] = $variableSchema;
-
             if ($variableSchema['deprecated'] ?? false) {
-                $logger->warn('variable is deprecated', [
+                $logger->warning('variable is deprecated', [
                     'featureKey' => $featureKey,
                     'variableKey' => $variableKey
                 ]);
@@ -76,7 +78,7 @@ class EvaluateNotFound
                 'reason' => Evaluation::NO_VARIATIONS
             ];
 
-            $logger->warn('no variations', $result['evaluation']);
+            $logger->warning('no variations', $result['evaluation']);
 
             return $result;
         }
