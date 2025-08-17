@@ -2,6 +2,7 @@
 
 namespace Featurevisor\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Logger;
@@ -10,274 +11,207 @@ use function Featurevisor\createLogger;
 
 class LoggerTest extends TestCase
 {
-    public function testCreateLoggerWithDefaultOptions()
+    private string $logBuffer;
+
+    public static function levelsLoggingTestDataProvider(): iterable
+    {
+        yield LogLevel::DEBUG => [LogLevel::DEBUG];
+        yield LogLevel::INFO => [LogLevel::INFO];
+        yield LogLevel::WARNING => [LogLevel::WARNING];
+        yield LogLevel::ERROR => [LogLevel::ERROR];
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->logBuffer = '';
+    }
+
+    public function testCreateLoggerWithDefaultOptions(): void
     {
         $logger = createLogger();
-        $this->assertInstanceOf(Logger::class, $logger);
+        self::assertInstanceOf(Logger::class, $logger);
     }
 
-    public function testCreateLoggerWithCustomLevel()
+    public function testCreateLoggerWithCustomLevel(): void
     {
         $logger = createLogger(['level' => 'debug']);
-        $this->assertInstanceOf(Logger::class, $logger);
+        self::assertInstanceOf(Logger::class, $logger);
     }
 
-    public function testCreateLoggerWithCustomHandler()
+    public function testCreateLoggerWithCustomHandler(): void
     {
         $customHandlerCalled = false;
         $customHandler = function($level, $message, $details) use (&$customHandlerCalled) {
             $customHandlerCalled = true;
-            $this->assertEquals('info', $level);
-            $this->assertEquals('test message', $message);
-            $this->assertSame([], $details);
+            self::assertEquals('info', $level);
+            self::assertEquals('[Featurevisor] test message', $message);
+            self::assertSame([], $details);
         };
 
         $logger = createLogger(['handler' => $customHandler]);
         $logger->info('test message');
 
-        $this->assertTrue($customHandlerCalled);
+        self::assertTrue($customHandlerCalled);
     }
 
-    public function testLoggerConstructorUsesDefaultLogLevelWhenNoneProvided()
+    public function testLoggerConstructorUsesDefaultLogLevelWhenNoneProvided(): void
     {
         $logger = new Logger([]);
 
         // Capture output to verify debug is not logged with default level (info)
-        ob_start();
         $logger->debug('debug message');
-        $output = ob_get_clean();
 
         // Debug should not be logged with default level (info)
-        $this->assertEmpty($output);
+        self::assertEmpty($this->logBuffer);
     }
 
-    public function testLoggerConstructorUsesProvidedLogLevel()
+    public function testLoggerConstructorUsesProvidedLogLevel(): void
     {
-        $logger = new Logger(['level' => 'debug']);
+        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
 
-        // Capture output to verify debug is logged with debug level
-        ob_start();
         $logger->debug('debug message');
-        $output = ob_get_clean();
 
-        // Debug should be logged with debug level
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('debug message', $output);
+        self::assertEquals('[Featurevisor] debug message' . PHP_EOL, $this->logBuffer);
     }
 
-    public function testLoggerConstructorUsesDefaultHandlerWhenNoneProvided()
+    public function testLoggerConstructorUsesDefaultHandlerWhenNoneProvided(): void
     {
-        $logger = new Logger([]);
+        $logger = new Logger(['handler' => $this->spyHandler(...)]);
 
-        // Capture output to verify info is logged
-        ob_start();
         $logger->info('test message');
-        $output = ob_get_clean();
 
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('test message', $output);
+        self::assertEquals('[Featurevisor] test message' . PHP_EOL, $this->logBuffer);
     }
 
-    public function testLoggerConstructorUsesProvidedHandler()
+    public function testLoggerConstructorUsesProvidedHandler(): void
     {
         $customHandlerCalled = false;
         $customHandler = function($level, $message, $details) use (&$customHandlerCalled) {
             $customHandlerCalled = true;
-            $this->assertEquals('info', $level);
-            $this->assertEquals('test message', $message);
-            $this->assertSame([], $details);
+            self::assertEquals('info', $level);
+            self::assertEquals('[Featurevisor] test message', $message);
+            self::assertSame([], $details);
         };
 
         $logger = new Logger(['handler' => $customHandler]);
         $logger->info('test message');
 
-        $this->assertTrue($customHandlerCalled);
+        self::assertTrue($customHandlerCalled);
     }
 
     public function testSetLevelUpdatesTheLogLevel()
     {
-        $logger = new Logger(['level' => 'info']);
+        $logger = new Logger(['level' => LogLevel::INFO, 'handler' => $this->spyHandler(...)]);
 
         // Debug should not be logged initially
-        ob_start();
-        $logger->debug('debug message');
-        $output = ob_get_clean();
-        $this->assertEmpty($output);
+        $logger->debug('first debug message');
 
         // Set to debug level
-        $logger->setLevel('debug');
-        ob_start();
-        $logger->debug('debug message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('debug message', $output);
+        $logger->setLevel(LogLevel::DEBUG);
+        $logger->debug('second debug message');
+
+        self::assertEquals(
+            '[Featurevisor] second debug message' . PHP_EOL,
+            $this->logBuffer
+        );
     }
 
-    public function testLogErrorMessagesAtAllLevels()
+    #[DataProvider('levelsLoggingTestDataProvider')]
+    public function testLogErrorMessagesAtAllLevels(string $level): void
     {
-        $levels = ['debug', 'info', 'warning', 'error'];
+        $logger = new Logger(['level' => $level, 'handler' => $this->spyHandler(...)]);
 
-        foreach ($levels as $level) {
-            $logger = new Logger(['level' => $level]);
-
-            ob_start();
-            $logger->error('error message');
-            $output = ob_get_clean();
-
-            $this->assertStringContainsString('[Featurevisor]', $output);
-            $this->assertStringContainsString('error message', $output);
-        }
-    }
-
-    public function testLogWarnMessagesAtWarnLevelAndAbove()
-    {
-        $logger = new Logger(['level' => LogLevel::WARNING]);
-
-        ob_start();
-        $logger->warning('warn message');
-        $output = ob_get_clean();
-        var_dump($output);
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('warn message', $output);
-
-        ob_start();
         $logger->error('error message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('error message', $output);
+
+        self::assertEquals(
+            '[Featurevisor] error message' . PHP_EOL,
+            $this->logBuffer
+        );
     }
 
-    public function testNotLogInfoMessagesAtWarnLevel()
+    public function testLogWarnMessagesAtWarnLevelAndAbove(): void
     {
-        $logger = new Logger(['level' => LogLevel::WARNING]);
+        $logger = new Logger(['level' => LogLevel::WARNING, 'handler' => $this->spyHandler(...)]);
 
-        ob_start();
-        $logger->info('info message');
-        $output = ob_get_clean();
-
-        $this->assertEmpty($output);
-    }
-
-    public function testNotLogDebugMessagesAtInfoLevel()
-    {
-        $logger = new Logger(['level' => 'info']);
-
-        ob_start();
-        $logger->debug('debug message');
-        $output = ob_get_clean();
-
-        $this->assertEmpty($output);
-    }
-
-    public function testLogAllMessagesAtDebugLevel()
-    {
-        $logger = new Logger(['level' => 'debug']);
-
-        ob_start();
-        $logger->debug('debug message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('debug message', $output);
-
-        ob_start();
-        $logger->info('info message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('info message', $output);
-
-        ob_start();
         $logger->warning('warn message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('warn message', $output);
-
-        ob_start();
         $logger->error('error message');
-        $output = ob_get_clean();
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('error message', $output);
+
+        self::assertEquals(
+            '[Featurevisor] warn message' . PHP_EOL .
+            '[Featurevisor] error message' . PHP_EOL,
+            $this->logBuffer
+        );
     }
 
-    public function testDebugMethodCallsCorrectly()
+    public function testNotLogInfoMessagesAtWarnLevel(): void
     {
-        $logger = new Logger(['level' => 'debug']);
+        $logger = new Logger(['level' => LogLevel::WARNING, 'handler' => $this->spyHandler(...)]);
 
-        ob_start();
-        $logger->debug('debug message');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('debug message', $output);
-    }
-
-    public function testInfoMethodCallsCorrectly()
-    {
-        $logger = new Logger(['level' => 'debug']);
-
-        ob_start();
         $logger->info('info message');
-        $output = ob_get_clean();
 
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('info message', $output);
+        self::assertEmpty($this->logBuffer);
     }
 
-    public function testWarnMethodCallsCorrectly()
+    public function testNotLogDebugMessagesAtInfoLevel(): void
     {
-        $logger = new Logger(['level' => 'debug']);
+        $logger = new Logger(['level' => 'info', 'handler' => $this->spyHandler(...)]);
 
-        ob_start();
+        $logger->debug('debug message');
+
+        self::assertEmpty($this->logBuffer);
+    }
+
+    public function testLogAllMessagesAtDebugLevel(): void
+    {
+        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
+
+        $logger->debug('debug message');
+        $logger->info('info message');
         $logger->warning('warn message');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('warn message', $output);
-    }
-
-    public function testErrorMethodCallsCorrectly()
-    {
-        $logger = new Logger(['level' => 'debug']);
-
-        ob_start();
         $logger->error('error message');
-        $output = ob_get_clean();
 
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('error message', $output);
+        self::assertEquals(
+            '[Featurevisor] debug message' . PHP_EOL .
+            '[Featurevisor] info message' . PHP_EOL .
+            '[Featurevisor] warn message' . PHP_EOL .
+            '[Featurevisor] error message' . PHP_EOL,
+            $this->logBuffer
+        );
     }
 
-    public function testHandleDetailsParameter()
+    public function testHandleDetailsParameter(): void
     {
-        $logger = new Logger(['level' => 'debug']);
+        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
         $details = ['key' => 'value', 'number' => 42];
 
-        ob_start();
         $logger->info('message with details', $details);
-        $output = ob_get_clean();
 
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('message with details', $output);
-        // Note: In PHP, the details might be serialized differently than in JS
+        self::assertEquals(
+            '[Featurevisor] message with details {"key":"value","number":42}' . PHP_EOL,
+            $this->logBuffer
+        );
     }
 
-    public function testLogMethodCallsHandlerWithCorrectParameters()
+    public function testLogMethodCallsHandlerWithCorrectParameters(): void
     {
         $customHandlerCalled = false;
         $customHandler = function($level, $message, $details) use (&$customHandlerCalled) {
             $customHandlerCalled = true;
-            $this->assertEquals('info', $level);
-            $this->assertEquals('test message', $message);
-            $this->assertEquals(['test' => true], $details);
+            self::assertEquals('info', $level);
+            self::assertEquals('[Featurevisor] test message', $message);
+            self::assertEquals(['test' => true], $details);
         };
 
         $logger = new Logger(['handler' => $customHandler, 'level' => 'debug']);
         $details = ['test' => true];
 
         $logger->log('info', 'test message', $details);
-        $this->assertTrue($customHandlerCalled);
+
+        self::assertTrue($customHandlerCalled);
     }
 
-    public function testLogMethodNotCallHandlerWhenLevelIsFilteredOut()
+    public function testLogMethodNotCallHandlerWhenLevelIsFilteredOut(): void
     {
         $customHandlerCalled = false;
         $customHandler = function($level, $message, $details) use (&$customHandlerCalled) {
@@ -287,68 +221,13 @@ class LoggerTest extends TestCase
         $logger = new Logger(['handler' => $customHandler, 'level' => LogLevel::WARNING]);
 
         $logger->log('debug', 'debug message');
-        $this->assertFalse($customHandlerCalled);
+        self::assertFalse($customHandlerCalled);
     }
 
-    public function testDefaultLogHandlerUsesConsoleLogForDebugLevel()
+    private function spyHandler(string $level, string|Stringable $message, array $context): void
     {
-        ob_start();
-        Logger::defaultLogHandler('debug', 'debug message');
-        $output = ob_get_clean();
+        $context = $context !== [] ? ' ' . json_encode($context, JSON_THROW_ON_ERROR) : '';
 
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('debug message', $output);
-    }
-
-    public function testDefaultLogHandlerUsesConsoleInfoForInfoLevel()
-    {
-        ob_start();
-        Logger::defaultLogHandler('info', 'info message');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('info message', $output);
-    }
-
-    public function testDefaultLogHandlerUsesConsoleWarnForWarnLevel()
-    {
-        ob_start();
-        Logger::defaultLogHandler(LogLevel::WARNING, 'warn message');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('warn message', $output);
-    }
-
-    public function testDefaultLogHandlerUsesConsoleErrorForErrorLevel()
-    {
-        ob_start();
-        Logger::defaultLogHandler('error', 'error message');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('error message', $output);
-    }
-
-    public function testDefaultLogHandlerHandlesUndefinedDetails()
-    {
-        ob_start();
-        Logger::defaultLogHandler('info', 'message without details');
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('message without details', $output);
-    }
-
-    public function testDefaultLogHandlerHandlesProvidedDetails()
-    {
-        $details = ['key' => 'value'];
-
-        ob_start();
-        Logger::defaultLogHandler('info', 'message with details', $details);
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('[Featurevisor]', $output);
-        $this->assertStringContainsString('message with details', $output);
+        $this->logBuffer .= $message.$context.PHP_EOL;
     }
 }

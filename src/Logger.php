@@ -3,13 +3,16 @@
 namespace Featurevisor;
 
 use Closure;
+use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Psr\Log\LogLevel;
+use Stringable;
 
 class Logger implements LoggerInterface
 {
     use LoggerTrait;
+    private const MSG_PREFIX = '[Featurevisor]';
 
     private const ALL_LEVELS = [
         LogLevel::EMERGENCY,
@@ -41,10 +44,14 @@ class Logger implements LoggerInterface
 
     public function setLevel(string $level): void
     {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
+            throw new InvalidArgumentException('Invalid log level');
+        }
+
         $this->level = $level;
     }
 
-    public function log($level, string|\Stringable $message, array $context = []): void
+    public function log($level, string|Stringable $message, array $context = []): void
     {
         $shouldHandle = array_search($this->level, self::ALL_LEVELS) >= array_search($level, self::ALL_LEVELS);
 
@@ -52,16 +59,22 @@ class Logger implements LoggerInterface
             return;
         }
 
-        ($this->handler)($level, $message, $context);
+        ($this->handler)($level, self::MSG_PREFIX.' '.$message, $context);
     }
 
     public static function defaultLogHandler(string $level, string $message, $details = null): void
     {
-        $prefix = '[Featurevisor]';
-        echo "$prefix $message";
-        if (!is_null($details)) {
-            echo ' ' . json_encode($details);
+        if (STDOUT === false) {
+            return;
         }
-        echo PHP_EOL;
+
+        fwrite(
+            STDOUT,
+            sprintf(
+                '%s %s',
+                $message,
+                $details !== null ? json_encode($details, JSON_THROW_ON_ERROR) : null
+            ) . PHP_EOL
+        );
     }
 }
