@@ -54,13 +54,13 @@ class DatafileReaderTest extends TestCase {
             'datafile' => $datafileJson,
             'logger' => $logger,
         ]);
-        $this->assertEquals('1', $reader->getRevision());
-        $this->assertEquals('2', $reader->getSchemaVersion());
-        $this->assertEquals($datafileJson['segments']['netherlands'], $reader->getSegment('netherlands'));
-        $this->assertEquals('de', $reader->getSegment('germany')['conditions'][0]['value']);
-        $this->assertNull($reader->getSegment('belgium'));
-        $this->assertEquals($datafileJson['features']['test'], $reader->getFeature('test'));
-        $this->assertNull($reader->getFeature('test2'));
+        self::assertEquals('1', $reader->getRevision());
+        self::assertEquals('2', $reader->getSchemaVersion());
+        self::assertEquals($datafileJson['segments']['netherlands'], $reader->getSegment('netherlands'));
+        self::assertEquals('de', $reader->getSegment('germany')['conditions'][0]['value']);
+        self::assertNull($reader->getSegment('belgium'));
+        self::assertEquals($datafileJson['features']['test'], $reader->getFeature('test'));
+        self::assertNull($reader->getFeature('test2'));
     }
 
     public function testSegmentsMatching() {
@@ -119,60 +119,60 @@ class DatafileReaderTest extends TestCase {
         ]);
         // everyone
         $group = $groups[0];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['foo' => 'foo']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['bar' => 'bar']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['foo' => 'foo']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['bar' => 'bar']));
         // dutchMobileUsers
         $group = $groups[1];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
         // dutchMobileUsers2 (same as above)
         $group = $groups[1];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
         // dutchMobileOrDesktopUsers
         $group = $groups[3];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
         // dutchMobileOrDesktopUsers2
         $group = $groups[4];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
         // germanMobileUsers
         $group = $groups[5];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
         // germanNonMobileUsers
         $group = $groups[6];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop', 'browser' => 'chrome']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'desktop', 'browser' => 'chrome']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'desktop']));
         // notVersion5.5
         $group = $groups[7];
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.6']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.6]));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.7']));
-        $this->assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.7]));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.5']));
-        $this->assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.5]));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], []));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.6']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.6]));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.7']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.7]));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.5']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.5]));
     }
 }

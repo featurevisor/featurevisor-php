@@ -21,7 +21,7 @@ class EventsTest extends TestCase
 
         $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
 
-        $this->assertEquals([
+        self::assertEquals([
             'features' => ['feature2', 'feature3'],
             'replaced' => $replace,
         ], $result);
@@ -41,7 +41,7 @@ class EventsTest extends TestCase
 
         $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
 
-        $this->assertEquals([
+        self::assertEquals([
             'features' => ['feature1', 'feature2', 'feature3'],
             'replaced' => $replace,
         ], $result);
@@ -78,7 +78,7 @@ class EventsTest extends TestCase
 
         $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
-        $this->assertEquals([
+        self::assertEquals([
             'revision' => '2',
             'previousRevision' => '1',
             'revisionChanged' => true,
@@ -121,7 +121,7 @@ class EventsTest extends TestCase
 
         $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
-        $this->assertEquals([
+        self::assertEquals([
             'revision' => '2',
             'previousRevision' => '1',
             'revisionChanged' => true,
@@ -162,7 +162,7 @@ class EventsTest extends TestCase
 
         $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
 
-        $this->assertEquals([
+        self::assertEquals([
             'revision' => '2',
             'previousRevision' => '1',
             'revisionChanged' => true,

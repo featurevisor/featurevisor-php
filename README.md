@@ -26,7 +26,6 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Updating datafile](#updating-datafile)
   - [Interval-based update](#interval-based-update)
 - [Logging](#logging)
-  - [Levels](#levels)
   - [Customizing levels](#customizing-levels)
   - [Handler](#handler)
 - [Events](#events)
@@ -354,21 +353,14 @@ Here's an example of using interval-based update:
 ## Logging
 
 By default, Featurevisor SDKs will print out logs to the console for `info` level and above.
-
-### Levels
-
-These are all the available log levels:
-
-- `error`
-- `warn`
-- `info`
-- `debug`
+Featurevisor PHP-SDK by default uses [PSR-3 standard](https://www.php-fig.org/psr/psr-3/) simple implementation.
+You can also choose from many mature implementations like e.g. [Monolog](https://github.com/Seldaek/monolog)
 
 ### Customizing levels
 
 If you choose `debug` level to make the logs more verbose, you can set it at the time of SDK initialization.
 
-Setting `debug` level will print out all logs, including `info`, `warn`, and `error` levels.
+Setting `debug` level will print out all logs, including `info`, `warning`, and `error` levels.
 
 ```php
 use function Featurevisor\createInstance;

@@ -3,7 +3,10 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
+use Featurevisor\DatafileReader;
+use Psr\Log\LogLevel;
 use function Featurevisor\createInstance;
+use function Featurevisor\createLogger;
 
 /**
  * CLI Options
@@ -93,11 +96,11 @@ function buildDatafiles(string $featurevisorProjectPath, array $environments): a
 }
 
 function getLoggerLevel(array $cliOptions): string {
-    $level = 'warn';
+    $level = LogLevel::WARNING;
     if ($cliOptions['verbose'] === true) {
-        $level = 'debug';
+        $level = LogLevel::DEBUG;
     } else if ($cliOptions['quiet'] === true) {
-        $level = 'error';
+        $level = LogLevel::ERROR;
     }
     return $level;
 }
@@ -252,9 +255,9 @@ function testSegment(array $assertion, array $segment, string $level): array {
         'segments' => []
     ];
 
-    $datafileReader = new \Featurevisor\DatafileReader([
+    $datafileReader = new DatafileReader([
         'datafile' => $datafile,
-        'logger' => \Featurevisor\createLogger([
+        'logger' => createLogger([
             'level' => $level,
         ]),
     ]);
@@ -303,7 +306,9 @@ function test(array $cliOptions) {
         $datafile = $datafilesByEnvironment[$environment];
         $sdkInstancesByEnvironment[$environment] = createInstance([
             'datafile' => $datafile,
-            'logLevel' => $level,
+            'logger' => createLogger([
+              'level' => $level,
+            ]),
             'hooks' => [
                 [
                     'name' => 'tester-hook',
@@ -340,7 +345,9 @@ function test(array $cliOptions) {
                     $datafile = $datafilesByEnvironment[$environment];
                     $f = createInstance([
                         'datafile' => $datafile,
-                        'logLevel' => $level,
+                        'logger' => createLogger([
+                          'level' => $level,
+                        ]),
                         'hooks' => [
                             [
                                 'name' => 'tester-hook',
@@ -415,7 +422,9 @@ function benchmark(array $cliOptions) {
 
     $f = createInstance([
         'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
-        'logLevel' => $level,
+        'logger' => createLogger([
+          'level' => $level,
+        ]),
     ]);
 
     $value = null;
@@ -474,7 +483,9 @@ function assessDistribution(array $cliOptions) {
 
     $f = createInstance([
         'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
-        'logLevel' => $level,
+        'logger' => createLogger([
+          'level' => $level,
+        ]),
     ]);
 
     $value = null;

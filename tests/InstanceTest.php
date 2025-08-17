@@ -4,6 +4,7 @@ namespace Featurevisor\Tests;
 
 use PHPUnit\Framework\TestCase;
 
+use Psr\Log\LogLevel;
 use function Featurevisor\createInstance;
 use function Featurevisor\createLogger;
 
@@ -20,7 +21,7 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertTrue(method_exists($sdk, 'getVariation'));
+        self::assertTrue(method_exists($sdk, 'getVariation'));
     }
 
     public function testShouldConfigurePlainBucketBy()
@@ -67,9 +68,9 @@ class InstanceTest extends TestCase
             'userId' => '123',
         ];
 
-        $this->assertTrue($sdk->isEnabled($featureKey, $context));
-        $this->assertEquals('control', $sdk->getVariation($featureKey, $context));
-        $this->assertEquals('123.test', $capturedBucketKey);
+        self::assertTrue($sdk->isEnabled($featureKey, $context));
+        self::assertEquals('control', $sdk->getVariation($featureKey, $context));
+        self::assertEquals('123.test', $capturedBucketKey);
     }
 
     public function testShouldConfigureAndBucketBy()
@@ -117,8 +118,8 @@ class InstanceTest extends TestCase
             'organizationId' => '456',
         ];
 
-        $this->assertEquals('control', $sdk->getVariation($featureKey, $context));
-        $this->assertEquals('123.456.test', $capturedBucketKey);
+        self::assertEquals('control', $sdk->getVariation($featureKey, $context));
+        self::assertEquals('123.456.test', $capturedBucketKey);
     }
 
     public function testShouldConfigureOrBucketBy()
@@ -160,20 +161,20 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertTrue($sdk->isEnabled('test', [
+        self::assertTrue($sdk->isEnabled('test', [
             'userId' => '123',
             'deviceId' => '456',
         ]));
-        $this->assertEquals('control', $sdk->getVariation('test', [
+        self::assertEquals('control', $sdk->getVariation('test', [
             'userId' => '123',
             'deviceId' => '456',
         ]));
-        $this->assertEquals('123.test', $capturedBucketKey);
+        self::assertEquals('123.test', $capturedBucketKey);
 
-        $this->assertEquals('control', $sdk->getVariation('test', [
+        self::assertEquals('control', $sdk->getVariation('test', [
             'deviceId' => '456',
         ]));
-        $this->assertEquals('456.test', $capturedBucketKey);
+        self::assertEquals('456.test', $capturedBucketKey);
     }
 
     public function testShouldInterceptContextBeforeHook()
@@ -223,10 +224,10 @@ class InstanceTest extends TestCase
             'userId' => '123',
         ]);
 
-        $this->assertEquals('control', $variation);
-        $this->assertTrue($intercepted);
-        $this->assertEquals('test', $interceptedFeatureKey);
-        $this->assertEquals('', $interceptedVariableKey);
+        self::assertEquals('control', $variation);
+        self::assertTrue($intercepted);
+        self::assertEquals('test', $interceptedFeatureKey);
+        self::assertEquals('', $interceptedVariableKey);
     }
 
     public function testShouldInterceptValueAfterHook()
@@ -277,10 +278,10 @@ class InstanceTest extends TestCase
             'userId' => '123',
         ]);
 
-        $this->assertEquals('control_intercepted', $variation); // should not be "control" any more
-        $this->assertTrue($intercepted);
-        $this->assertEquals('test', $interceptedFeatureKey);
-        $this->assertEquals('', $interceptedVariableKey);
+        self::assertEquals('control_intercepted', $variation); // should not be "control" any more
+        self::assertTrue($intercepted);
+        self::assertEquals('test', $interceptedFeatureKey);
+        self::assertEquals('', $interceptedVariableKey);
     }
 
     public function testShouldInitializeWithStickyFeatures()
@@ -322,23 +323,23 @@ class InstanceTest extends TestCase
         ]);
 
         // initially control
-        $this->assertEquals('control', $sdk->getVariation('test', [
+        self::assertEquals('control', $sdk->getVariation('test', [
             'userId' => '123',
         ]));
-        $this->assertEquals('red', $sdk->getVariable('test', 'color', [
+        self::assertEquals('red', $sdk->getVariable('test', 'color', [
             'userId' => '123',
         ]));
 
         $sdk->setDatafile($datafileContent);
 
         // still control after setting datafile
-        $this->assertEquals('control', $sdk->getVariation('test', [
+        self::assertEquals('control', $sdk->getVariation('test', [
             'userId' => '123',
         ]));
 
         // unsetting sticky features will make it treatment
         $sdk->setSticky([], true);
-        $this->assertEquals('treatment', $sdk->getVariation('test', [
+        self::assertEquals('treatment', $sdk->getVariation('test', [
             'userId' => '123',
         ]));
     }
@@ -381,7 +382,7 @@ class InstanceTest extends TestCase
         ]);
 
         // should be disabled because required is disabled
-        $this->assertFalse($sdk->isEnabled('myKey'));
+        self::assertFalse($sdk->isEnabled('myKey'));
 
         // enabling required should enable the feature too
         $sdk2 = createInstance([
@@ -418,7 +419,7 @@ class InstanceTest extends TestCase
                 'segments' => [],
             ],
         ]);
-        $this->assertTrue($sdk2->isEnabled('myKey'));
+        self::assertTrue($sdk2->isEnabled('myKey'));
     }
 
     public function testShouldHonourRequiredFeaturesWithVariation()
@@ -468,7 +469,7 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertFalse($sdk->isEnabled('myKey'));
+        self::assertFalse($sdk->isEnabled('myKey'));
 
         // child should be enabled because required has desired variation
         $sdk2 = createInstance([
@@ -514,7 +515,7 @@ class InstanceTest extends TestCase
                 'segments' => [],
             ],
         ]);
-        $this->assertTrue($sdk2->isEnabled('myKey'));
+        self::assertTrue($sdk2->isEnabled('myKey'));
     }
 
     public function testShouldEmitWarningsForDeprecatedFeature()
@@ -564,7 +565,7 @@ class InstanceTest extends TestCase
             ],
             'logger' => createLogger([
                 'handler' => function($level, $message) use (&$deprecatedCount) {
-                    if ($level === 'warn' && strpos($message, 'is deprecated') !== false) {
+                    if ($level === LogLevel::WARNING && strpos($message, 'is deprecated') !== false) {
                         $deprecatedCount += 1;
                     }
                 },
@@ -578,9 +579,9 @@ class InstanceTest extends TestCase
             'userId' => '123',
         ]);
 
-        $this->assertEquals('control', $testVariation);
-        $this->assertEquals('control', $deprecatedTestVariation);
-        $this->assertEquals(1, $deprecatedCount);
+        self::assertEquals('control', $testVariation);
+        self::assertEquals('control', $deprecatedTestVariation);
+        self::assertEquals(1, $deprecatedCount);
     }
 
     public function testShouldCheckIfEnabledForOverriddenFlagsFromRules()
@@ -625,8 +626,8 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertTrue($sdk->isEnabled('test', ['userId' => 'user-123', 'country' => 'de']));
-        $this->assertFalse($sdk->isEnabled('test', ['userId' => 'user-123', 'country' => 'nl']));
+        self::assertTrue($sdk->isEnabled('test', ['userId' => 'user-123', 'country' => 'de']));
+        self::assertFalse($sdk->isEnabled('test', ['userId' => 'user-123', 'country' => 'nl']));
     }
 
     public function testShouldCheckIfEnabledForMutuallyExclusiveFeatures()
@@ -657,14 +658,14 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertFalse($sdk->isEnabled('test'));
-        $this->assertFalse($sdk->isEnabled('test', ['userId' => '123']));
+        self::assertFalse($sdk->isEnabled('test'));
+        self::assertFalse($sdk->isEnabled('test', ['userId' => '123']));
 
         $bucketValue = 40000;
-        $this->assertTrue($sdk->isEnabled('mutex', ['userId' => '123']));
+        self::assertTrue($sdk->isEnabled('mutex', ['userId' => '123']));
 
         $bucketValue = 60000;
-        $this->assertFalse($sdk->isEnabled('mutex', ['userId' => '123']));
+        self::assertFalse($sdk->isEnabled('mutex', ['userId' => '123']));
     }
 
     public function testShouldGetVariation()
@@ -732,19 +733,19 @@ class InstanceTest extends TestCase
             'userId' => '123',
         ];
 
-        $this->assertEquals('treatment', $sdk->getVariation('test', $context));
-        $this->assertEquals('treatment', $sdk->getVariation('test', ['userId' => 'user-ch']));
+        self::assertEquals('treatment', $sdk->getVariation('test', $context));
+        self::assertEquals('treatment', $sdk->getVariation('test', ['userId' => 'user-ch']));
 
         // non existing
-        $this->assertNull($sdk->getVariation('nonExistingFeature', $context));
+        self::assertNull($sdk->getVariation('nonExistingFeature', $context));
 
         // disabled
-        $this->assertNull($sdk->getVariation('test', ['userId' => 'user-gb']));
-        $this->assertNull($sdk->getVariation('test', ['userId' => 'user-gb']));
-        $this->assertNull($sdk->getVariation('test', ['userId' => '123', 'country' => 'nl']));
+        self::assertNull($sdk->getVariation('test', ['userId' => 'user-gb']));
+        self::assertNull($sdk->getVariation('test', ['userId' => 'user-gb']));
+        self::assertNull($sdk->getVariation('test', ['userId' => '123', 'country' => 'nl']));
 
         // no variation
-        $this->assertNull($sdk->getVariation('testWithNoVariation', $context));
+        self::assertNull($sdk->getVariation('testWithNoVariation', $context));
     }
 
     public function testShouldGetVariable()
@@ -946,7 +947,7 @@ class InstanceTest extends TestCase
         ];
 
         $evaluatedFeatures = $sdk->getAllEvaluations($context);
-        $this->assertEquals([
+        self::assertEquals([
             'test' => [
                 'enabled' => true,
                 'variation' => 'treatment',
@@ -972,66 +973,66 @@ class InstanceTest extends TestCase
             ],
         ], $evaluatedFeatures);
 
-        $this->assertEquals('treatment', $sdk->getVariation('test', $context));
-        $this->assertEquals('control', $sdk->getVariation('test', array_merge($context, ['country' => 'be'])));
-        $this->assertEquals('control', $sdk->getVariation('test', ['userId' => 'user-ch']));
+        self::assertEquals('treatment', $sdk->getVariation('test', $context));
+        self::assertEquals('control', $sdk->getVariation('test', array_merge($context, ['country' => 'be'])));
+        self::assertEquals('control', $sdk->getVariation('test', ['userId' => 'user-ch']));
 
-        $this->assertEquals('red', $sdk->getVariable('test', 'color', $context));
-        $this->assertEquals('red', $sdk->getVariableString('test', 'color', $context));
-        $this->assertEquals('black', $sdk->getVariable('test', 'color', array_merge($context, ['country' => 'be'])));
-        $this->assertEquals('red and white', $sdk->getVariable('test', 'color', ['userId' => 'user-ch']));
+        self::assertEquals('red', $sdk->getVariable('test', 'color', $context));
+        self::assertEquals('red', $sdk->getVariableString('test', 'color', $context));
+        self::assertEquals('black', $sdk->getVariable('test', 'color', array_merge($context, ['country' => 'be'])));
+        self::assertEquals('red and white', $sdk->getVariable('test', 'color', ['userId' => 'user-ch']));
 
-        $this->assertEquals(true, $sdk->getVariable('test', 'showSidebar', $context));
-        $this->assertEquals(true, $sdk->getVariableBoolean('test', 'showSidebar', $context));
-        $this->assertEquals(false, $sdk->getVariableBoolean('test', 'showSidebar', array_merge($context, ['country' => 'nl'])));
-        $this->assertEquals(false, $sdk->getVariableBoolean('test', 'showSidebar', array_merge($context, ['country' => 'de'])));
+        self::assertEquals(true, $sdk->getVariable('test', 'showSidebar', $context));
+        self::assertEquals(true, $sdk->getVariableBoolean('test', 'showSidebar', $context));
+        self::assertEquals(false, $sdk->getVariableBoolean('test', 'showSidebar', array_merge($context, ['country' => 'nl'])));
+        self::assertEquals(false, $sdk->getVariableBoolean('test', 'showSidebar', array_merge($context, ['country' => 'de'])));
 
-        $this->assertEquals('German title', $sdk->getVariableString('test', 'sidebarTitle', [
+        self::assertEquals('German title', $sdk->getVariableString('test', 'sidebarTitle', [
             'userId' => 'user-forced-variation',
             'country' => 'de',
         ]));
-        $this->assertEquals('Dutch title', $sdk->getVariableString('test', 'sidebarTitle', [
+        self::assertEquals('Dutch title', $sdk->getVariableString('test', 'sidebarTitle', [
             'userId' => 'user-forced-variation',
             'country' => 'nl',
         ]));
-        $this->assertEquals('sidebar title from variation', $sdk->getVariableString('test', 'sidebarTitle', [
+        self::assertEquals('sidebar title from variation', $sdk->getVariableString('test', 'sidebarTitle', [
             'userId' => 'user-forced-variation',
             'country' => 'be',
         ]));
 
-        $this->assertEquals(0, $sdk->getVariable('test', 'count', $context));
-        $this->assertEquals(0, $sdk->getVariableInteger('test', 'count', $context));
+        self::assertEquals(0, $sdk->getVariable('test', 'count', $context));
+        self::assertEquals(0, $sdk->getVariableInteger('test', 'count', $context));
 
-        $this->assertEquals(9.99, $sdk->getVariable('test', 'price', $context));
-        $this->assertEquals(9.99, $sdk->getVariableDouble('test', 'price', $context));
+        self::assertEquals(9.99, $sdk->getVariable('test', 'price', $context));
+        self::assertEquals(9.99, $sdk->getVariableDouble('test', 'price', $context));
 
-        $this->assertEquals(['paypal', 'creditcard'], $sdk->getVariable('test', 'paymentMethods', $context));
-        $this->assertEquals(['paypal', 'creditcard'], $sdk->getVariableArray('test', 'paymentMethods', $context));
+        self::assertEquals(['paypal', 'creditcard'], $sdk->getVariable('test', 'paymentMethods', $context));
+        self::assertEquals(['paypal', 'creditcard'], $sdk->getVariableArray('test', 'paymentMethods', $context));
 
-        $this->assertEquals([
+        self::assertEquals([
             'key' => 'value',
         ], $sdk->getVariable('test', 'flatConfig', $context));
-        $this->assertEquals([
+        self::assertEquals([
             'key' => 'value',
         ], $sdk->getVariableObject('test', 'flatConfig', $context));
 
-        $this->assertEquals([
+        self::assertEquals([
             'key' => [
                 'nested' => 'value',
             ],
         ], $sdk->getVariable('test', 'nestedConfig', $context));
-        $this->assertEquals([
+        self::assertEquals([
             'key' => [
                 'nested' => 'value',
             ],
         ], $sdk->getVariableJSON('test', 'nestedConfig', $context));
 
         // non existing
-        $this->assertNull($sdk->getVariable('test', 'nonExisting', $context));
-        $this->assertNull($sdk->getVariable('nonExistingFeature', 'nonExisting', $context));
+        self::assertNull($sdk->getVariable('test', 'nonExisting', $context));
+        self::assertNull($sdk->getVariable('nonExistingFeature', 'nonExisting', $context));
 
         // disabled
-        $this->assertNull($sdk->getVariable('test', 'color', ['userId' => 'user-gb']));
+        self::assertNull($sdk->getVariable('test', 'color', ['userId' => 'user-gb']));
     }
 
     public function testShouldGetVariablesWithoutAnyVariations()
@@ -1090,10 +1091,10 @@ class InstanceTest extends TestCase
         ];
 
         // test default value
-        $this->assertEquals('red', $sdk->getVariable('test', 'color', $defaultContext));
+        self::assertEquals('red', $sdk->getVariable('test', 'color', $defaultContext));
 
         // test override
-        $this->assertEquals('orange', $sdk->getVariable('test', 'color', array_merge($defaultContext, ['country' => 'nl'])));
+        self::assertEquals('orange', $sdk->getVariable('test', 'color', array_merge($defaultContext, ['country' => 'nl'])));
     }
 
     public function testShouldCheckIfEnabledForIndividuallyNamedSegments()
@@ -1152,12 +1153,12 @@ class InstanceTest extends TestCase
             ],
         ]);
 
-        $this->assertFalse($sdk->isEnabled('test'));
-        $this->assertFalse($sdk->isEnabled('test', ['userId' => '123']));
-        $this->assertFalse($sdk->isEnabled('test', ['userId' => '123', 'country' => 'de']));
-        $this->assertFalse($sdk->isEnabled('test', ['userId' => '123', 'country' => 'us']));
+        self::assertFalse($sdk->isEnabled('test'));
+        self::assertFalse($sdk->isEnabled('test', ['userId' => '123']));
+        self::assertFalse($sdk->isEnabled('test', ['userId' => '123', 'country' => 'de']));
+        self::assertFalse($sdk->isEnabled('test', ['userId' => '123', 'country' => 'us']));
 
-        $this->assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'nl']));
-        $this->assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'us', 'device' => 'iphone']));
+        self::assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'nl']));
+        self::assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'us', 'device' => 'iphone']));
     }
 }

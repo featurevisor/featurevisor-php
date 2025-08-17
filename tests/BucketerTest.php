@@ -5,6 +5,7 @@ namespace Featurevisor\Tests;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Bucketer;
+use Psr\Log\LogLevel;
 use function Featurevisor\createLogger;
 
 class BucketerTest extends TestCase {
@@ -13,8 +14,8 @@ class BucketerTest extends TestCase {
         $keys = ['foo', 'bar', 'baz', '123adshlk348-93asdlk'];
         foreach ($keys as $key) {
             $n = Bucketer::getBucketedNumber($key);
-            $this->assertGreaterThanOrEqual(0, $n);
-            $this->assertLessThanOrEqual(Bucketer::MAX_BUCKETED_NUMBER, $n);
+            self::assertGreaterThanOrEqual(0, $n);
+            self::assertLessThanOrEqual(Bucketer::MAX_BUCKETED_NUMBER, $n);
         }
     }
 
@@ -30,68 +31,68 @@ class BucketerTest extends TestCase {
         ];
         foreach ($expectedResults as $key => $expected) {
             $n = Bucketer::getBucketedNumber($key);
-            $this->assertEquals($expected, $n, "Bucketed number for '$key' should be $expected, got $n");
+            self::assertEquals($expected, $n, "Bucketed number for '$key' should be $expected, got $n");
         }
     }
 
     public function testGetBucketKeyIsFunction() {
-        $this->assertTrue(is_callable([Bucketer::class, 'getBucketKey']));
+        self::assertTrue(is_callable([Bucketer::class, 'getBucketKey']));
     }
 
     public function testGetBucketKeyPlain() {
         $featureKey = 'test-feature';
         $bucketBy = 'userId';
         $context = ['userId' => '123', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyPlainMissingContext() {
         $featureKey = 'test-feature';
         $bucketBy = 'userId';
         $context = ['browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('test-feature', $bucketKey);
+        self::assertEquals('test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndAllPresent() {
         $featureKey = 'test-feature';
         $bucketBy = ['organizationId', 'userId'];
         $context = ['organizationId' => '123', 'userId' => '234', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.234.test-feature', $bucketKey);
+        self::assertEquals('123.234.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndPartial() {
         $featureKey = 'test-feature';
         $bucketBy = ['organizationId', 'userId'];
         $context = ['organizationId' => '123', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndDotSeparated() {
@@ -102,7 +103,7 @@ class BucketerTest extends TestCase {
             'user' => ['id' => '234'],
             'browser' => 'chrome',
         ];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
@@ -111,36 +112,36 @@ class BucketerTest extends TestCase {
         ]);
         // Note: The current PHP implementation does not support dot-separated paths in getValueFromContext
         // If you add support, this should pass:
-        // $this->assertEquals('123.234.test-feature', $bucketKey);
+        // self::assertEquals('123.234.test-feature', $bucketKey);
         // For now, it will be '123.test-feature' (since 'user.id' is not resolved)
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyOrFirstAvailable() {
         $featureKey = 'test-feature';
         $bucketBy = ['or' => ['userId', 'deviceId']];
         $context = ['deviceId' => 'deviceIdHere', 'userId' => '234', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('234.test-feature', $bucketKey);
+        self::assertEquals('234.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyOrOnlyDeviceId() {
         $featureKey = 'test-feature';
         $bucketBy = ['or' => ['userId', 'deviceId']];
         $context = ['deviceId' => 'deviceIdHere', 'browser' => 'chrome'];
-        $logger = createLogger(['level' => 'warn']);
+        $logger = createLogger(['level' => LogLevel::WARNING]);
         $bucketKey = Bucketer::getBucketKey([
             'featureKey' => $featureKey,
             'bucketBy' => $bucketBy,
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('deviceIdHere.test-feature', $bucketKey);
+        self::assertEquals('deviceIdHere.test-feature', $bucketKey);
     }
 }

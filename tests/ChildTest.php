@@ -148,15 +148,15 @@ class ChildTest extends TestCase {
             'context' => [ 'appVersion' => '1.0.0' ],
         ]);
 
-        $this->assertNotNull($f);
-        $this->assertEquals(['appVersion' => '1.0.0'], $f->getContext());
+        self::assertNotNull($f);
+        self::assertEquals(['appVersion' => '1.0.0'], $f->getContext());
 
         $childF = $f->spawn([
             'userId' => '123',
             'country' => 'nl',
         ]);
-        $this->assertNotNull($childF);
-        $this->assertEquals([
+        self::assertNotNull($childF);
+        self::assertEquals([
             'appVersion' => '1.0.0',
             'userId' => '123',
             'country' => 'nl',
@@ -168,50 +168,50 @@ class ChildTest extends TestCase {
         });
 
         $childF->setContext(['country' => 'be']);
-        $this->assertEquals([
+        self::assertEquals([
             'appVersion' => '1.0.0',
             'userId' => '123',
             'country' => 'be',
         ], $childF->getContext());
 
-        $this->assertTrue($childF->isEnabled('test'));
-        $this->assertEquals('control', $childF->getVariation('test'));
+        self::assertTrue($childF->isEnabled('test'));
+        self::assertEquals('control', $childF->getVariation('test'));
 
-        $this->assertEquals('black', $childF->getVariable('test', 'color'));
-        $this->assertEquals('black', $childF->getVariableString('test', 'color'));
+        self::assertEquals('black', $childF->getVariable('test', 'color'));
+        self::assertEquals('black', $childF->getVariableString('test', 'color'));
 
-        $this->assertEquals(false, $childF->getVariable('test', 'showSidebar'));
-        $this->assertEquals(false, $childF->getVariableBoolean('test', 'showSidebar'));
+        self::assertEquals(false, $childF->getVariable('test', 'showSidebar'));
+        self::assertEquals(false, $childF->getVariableBoolean('test', 'showSidebar'));
 
-        $this->assertEquals('sidebar title', $childF->getVariable('test', 'sidebarTitle'));
-        $this->assertEquals('sidebar title', $childF->getVariableString('test', 'sidebarTitle'));
+        self::assertEquals('sidebar title', $childF->getVariable('test', 'sidebarTitle'));
+        self::assertEquals('sidebar title', $childF->getVariableString('test', 'sidebarTitle'));
 
-        $this->assertEquals(0, $childF->getVariable('test', 'count'));
-        $this->assertEquals(0, $childF->getVariableInteger('test', 'count'));
+        self::assertEquals(0, $childF->getVariable('test', 'count'));
+        self::assertEquals(0, $childF->getVariableInteger('test', 'count'));
 
-        $this->assertEquals(9.99, $childF->getVariable('test', 'price'));
-        $this->assertEquals(9.99, $childF->getVariableDouble('test', 'price'));
+        self::assertEquals(9.99, $childF->getVariable('test', 'price'));
+        self::assertEquals(9.99, $childF->getVariableDouble('test', 'price'));
 
-        $this->assertEquals(['paypal', 'creditcard'], $childF->getVariable('test', 'paymentMethods'));
-        $this->assertEquals(['paypal', 'creditcard'], $childF->getVariableArray('test', 'paymentMethods'));
+        self::assertEquals(['paypal', 'creditcard'], $childF->getVariable('test', 'paymentMethods'));
+        self::assertEquals(['paypal', 'creditcard'], $childF->getVariableArray('test', 'paymentMethods'));
 
-        $this->assertEquals(['key' => 'value'], $childF->getVariable('test', 'flatConfig'));
-        $this->assertEquals(['key' => 'value'], $childF->getVariableObject('test', 'flatConfig'));
+        self::assertEquals(['key' => 'value'], $childF->getVariable('test', 'flatConfig'));
+        self::assertEquals(['key' => 'value'], $childF->getVariableObject('test', 'flatConfig'));
 
-        $this->assertEquals(['key' => ['nested' => 'value']], $childF->getVariable('test', 'nestedConfig'));
-        $this->assertEquals(['key' => ['nested' => 'value']], $childF->getVariableJSON('test', 'nestedConfig'));
+        self::assertEquals(['key' => ['nested' => 'value']], $childF->getVariable('test', 'nestedConfig'));
+        self::assertEquals(['key' => ['nested' => 'value']], $childF->getVariableJSON('test', 'nestedConfig'));
 
-        $this->assertTrue($contextUpdated);
+        self::assertTrue($contextUpdated);
         $unsubscribeContext();
 
-        $this->assertFalse($childF->isEnabled('newFeature'));
+        self::assertFalse($childF->isEnabled('newFeature'));
         $childF->setSticky([
             'newFeature' => [ 'enabled' => true ]
         ]);
-        $this->assertTrue($childF->isEnabled('newFeature'));
+        self::assertTrue($childF->isEnabled('newFeature'));
 
         $allEvaluations = $childF->getAllEvaluations();
-        $this->assertEquals(['test', 'anotherTest'], array_keys($allEvaluations));
+        self::assertEquals(['test', 'anotherTest'], array_keys($allEvaluations));
 
         $childF->close();
     }
