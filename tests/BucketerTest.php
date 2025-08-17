@@ -14,8 +14,8 @@ class BucketerTest extends TestCase {
         $keys = ['foo', 'bar', 'baz', '123adshlk348-93asdlk'];
         foreach ($keys as $key) {
             $n = Bucketer::getBucketedNumber($key);
-            $this->assertGreaterThanOrEqual(0, $n);
-            $this->assertLessThanOrEqual(Bucketer::MAX_BUCKETED_NUMBER, $n);
+            self::assertGreaterThanOrEqual(0, $n);
+            self::assertLessThanOrEqual(Bucketer::MAX_BUCKETED_NUMBER, $n);
         }
     }
 
@@ -31,12 +31,12 @@ class BucketerTest extends TestCase {
         ];
         foreach ($expectedResults as $key => $expected) {
             $n = Bucketer::getBucketedNumber($key);
-            $this->assertEquals($expected, $n, "Bucketed number for '$key' should be $expected, got $n");
+            self::assertEquals($expected, $n, "Bucketed number for '$key' should be $expected, got $n");
         }
     }
 
     public function testGetBucketKeyIsFunction() {
-        $this->assertTrue(is_callable([Bucketer::class, 'getBucketKey']));
+        self::assertTrue(is_callable([Bucketer::class, 'getBucketKey']));
     }
 
     public function testGetBucketKeyPlain() {
@@ -50,7 +50,7 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyPlainMissingContext() {
@@ -64,7 +64,7 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('test-feature', $bucketKey);
+        self::assertEquals('test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndAllPresent() {
@@ -78,7 +78,7 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.234.test-feature', $bucketKey);
+        self::assertEquals('123.234.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndPartial() {
@@ -92,7 +92,7 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyAndDotSeparated() {
@@ -112,9 +112,9 @@ class BucketerTest extends TestCase {
         ]);
         // Note: The current PHP implementation does not support dot-separated paths in getValueFromContext
         // If you add support, this should pass:
-        // $this->assertEquals('123.234.test-feature', $bucketKey);
+        // self::assertEquals('123.234.test-feature', $bucketKey);
         // For now, it will be '123.test-feature' (since 'user.id' is not resolved)
-        $this->assertEquals('123.test-feature', $bucketKey);
+        self::assertEquals('123.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyOrFirstAvailable() {
@@ -128,7 +128,7 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('234.test-feature', $bucketKey);
+        self::assertEquals('234.test-feature', $bucketKey);
     }
 
     public function testGetBucketKeyOrOnlyDeviceId() {
@@ -142,6 +142,6 @@ class BucketerTest extends TestCase {
             'context' => $context,
             'logger' => $logger,
         ]);
-        $this->assertEquals('deviceIdHere.test-feature', $bucketKey);
+        self::assertEquals('deviceIdHere.test-feature', $bucketKey);
     }
 }
