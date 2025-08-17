@@ -18,9 +18,7 @@ class Instance
     {
         // from options
         $this->context = $options['context'] ?? [];
-        $this->logger = $options['logger'] ?? createLogger([
-            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL
-        ]);
+        $this->logger = $options['logger'] ?? new NullLogger();
         $this->hooksManager = new HooksManager([
             'hooks' => $options['hooks'] ?? [],
             'logger' => $this->logger
