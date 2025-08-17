@@ -1,18 +1,13 @@
 <?php
 
+namespace Featurevisor\Tests;
+
 use PHPUnit\Framework\TestCase;
-require_once __DIR__ . '/../src/Bucketer.php';
-require_once __DIR__ . '/../src/Logger.php';
 
 use Featurevisor\Bucketer;
-use Featurevisor\Logger;
 use function Featurevisor\createLogger;
 
 class BucketerTest extends TestCase {
-    public function testGetBucketedNumberIsFunction() {
-        // In PHP, it's a static method
-        $this->assertTrue(is_callable([Bucketer::class, 'getBucketedNumber']));
-    }
 
     public function testGetBucketedNumberRange() {
         $keys = ['foo', 'bar', 'baz', '123adshlk348-93asdlk'];

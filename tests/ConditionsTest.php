@@ -1,9 +1,9 @@
 <?php
 
+namespace Featurevisor\Tests;
+
+use DateTime;
 use PHPUnit\Framework\TestCase;
-require_once __DIR__ . '/../src/Conditions.php';
-require_once __DIR__ . '/../src/DatafileReader.php';
-require_once __DIR__ . '/../src/Logger.php';
 
 use Featurevisor\DatafileReader;
 use function Featurevisor\createLogger;
@@ -22,10 +22,6 @@ class ConditionsTest extends TestCase {
             ],
             'logger' => $logger,
         ]);
-    }
-
-    public function testAllConditionsAreMatchedIsFunction() {
-        $this->assertTrue(is_callable([$this->datafileReader, 'allConditionsAreMatched']));
     }
 
     public function testMatchAllViaStar() {

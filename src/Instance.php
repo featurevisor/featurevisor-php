@@ -380,8 +380,3 @@ class Instance
         return $evaluations;
     }
 }
-
-function createInstance(array $options = []): Instance
-{
-    return new Instance($options);
-}

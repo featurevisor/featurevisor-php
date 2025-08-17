@@ -74,8 +74,3 @@ class Logger
         echo PHP_EOL;
     }
 }
-
-function createLogger(array $options = []): Logger
-{
-    return new Logger($options);
-}

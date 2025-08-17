@@ -1,9 +1,8 @@
 <?php
 
+namespace Featurevisor\Tests;
+
 use PHPUnit\Framework\TestCase;
-require_once __DIR__ . '/../src/Child.php';
-require_once __DIR__ . '/../src/Instance.php';
-require_once __DIR__ . '/../src/index.php';
 
 use function Featurevisor\createInstance;
 
