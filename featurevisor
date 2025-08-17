@@ -2,7 +2,6 @@
 <?php
 
 require __DIR__ . '/vendor/autoload.php';
-require __DIR__ . '/src/index.php';
 
 use function Featurevisor\createInstance;
 
@@ -471,6 +470,7 @@ function assessDistribution(array $cliOptions) {
     $populateUuid = $cliOptions['populateUuid'];
 
     $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
+    $level = getLoggerLevel($cliOptions);
 
     $f = createInstance([
         'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
