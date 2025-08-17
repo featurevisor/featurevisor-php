@@ -50,6 +50,7 @@
     "featurevisor"
   ],
   "scripts": {
+    "sast": "phpstan analyse --memory-limit=256M",
     "test": "phpunit tests"
   },
   "license": [
