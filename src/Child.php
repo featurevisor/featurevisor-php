@@ -52,7 +52,7 @@ class Child
 
     public function setSticky(array $sticky, bool $replace = false): void
     {
-        $previousStickyFeatures = $this->sticky ?? [];
+        $previousStickyFeatures = $this->sticky;
 
         if ($replace) {
             $this->sticky = $sticky;
