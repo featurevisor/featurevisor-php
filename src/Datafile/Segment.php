@@ -10,16 +10,13 @@ use Featurevisor\Datafile\Conditions\ConditionInterface;
 final class Segment
 {
     private bool $archived;
-    /**
-     * @var Condition|array<Condition>|string
-     */
-    private $conditions; // Can be Condition, List<Condition>, or String
+    private Conditions $conditions;
     private string $description;
 
     /**
      * @param array<array{
      *      archived: bool,
-     *      conditions: array{}|list<array{}>|string,
+     *      conditions: list<array<string, mixed>>|string,
      *      description: string
      *  }> $segments
      * @return array<Segment>
@@ -35,7 +32,7 @@ final class Segment
     /**
      * @param array{
      *     archived: bool,
-     *     conditions: array{}|list<array{}>|string,
+     *     conditions: list<array<string, mixed>>|string,
      *     description: string
      * } $data
      */
@@ -50,7 +47,7 @@ final class Segment
 
     public function __construct(
         string $description,
-        ConditionInterface $conditions,
+        Conditions $conditions,
         bool $archived = false
     )
     {
@@ -64,15 +61,7 @@ final class Segment
         return $this->archived;
     }
 
-    public function getKey(): string
-    {
-        return $this->key;
-    }
-
-    /**
-     * @return Condition|array<Condition>|string
-     */
-    public function getConditions()
+    public function getConditions(): Conditions
     {
         return $this->conditions;
     }

@@ -19,11 +19,16 @@ final class Content
      */
     public static function createFromPath(string $path): self
     {
-        if (file_exists($path)) {
-            $content = file_get_contents($path);
+        if (file_exists($path) === false) {
+            throw new \InvalidArgumentException("File '$path' not found");
         }
 
-        return self::createFromArray(json_decode($content, true, 512, JSON_THROW_ON_ERROR));
+        return self::createFromJson(file_get_contents($path));
+    }
+
+    public static function createFromJson(string $json): self
+    {
+        return self::createFromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -35,7 +40,7 @@ final class Content
      *  }>
      * } $data
      */
-    private static function createFromArray(array $data): self
+    public static function createFromArray(array $data): self
     {
         return new self(
             $data['schemaVersion'],

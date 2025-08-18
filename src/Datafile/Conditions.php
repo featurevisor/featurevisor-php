@@ -13,6 +13,10 @@ final class Conditions implements ConditionInterface
 {
     private ConditionInterface $expression;
 
+    /**
+     * @param string|list<array<string, list<array{attribute: string, operator: string, value?: mixed, regexFlags?: string}>>|array{attribute: string, operator: string, value?: mixed, regexFlags?: string}> $conditions
+     * @return self
+     */
     public static function createFromMixed($conditions): self
     {
         if ($conditions === '*') {

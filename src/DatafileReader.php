@@ -2,6 +2,7 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Datafile\Conditions;
 use Psr\Log\LoggerInterface;
 
 class DatafileReader
@@ -93,77 +94,7 @@ class DatafileReader
 
     public function allConditionsAreMatched($conditions, array $context): bool
     {
-        if (is_string($conditions)) {
-            if ($conditions === '*') {
-                return true;
-            }
-            // Try to parse as JSON
-            $parsed = json_decode($conditions, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $conditions = $parsed;
-            } else {
-                return false;
-            }
-        }
-
-        $getRegex = function(string $regexString, string $regexFlags) {
-            return $this->getRegex($regexString, $regexFlags);
-        };
-
-        if (is_array($conditions)) {
-            // If it's an empty array, always match (true)
-            if (count($conditions) === 0) {
-                return true;
-            }
-            // Logical operators
-            if (isset($conditions['and']) && is_array($conditions['and'])) {
-                foreach ($conditions['and'] as $subCondition) {
-                    if (!$this->allConditionsAreMatched($subCondition, $context)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            if (isset($conditions['or']) && is_array($conditions['or'])) {
-                foreach ($conditions['or'] as $subCondition) {
-                    if ($this->allConditionsAreMatched($subCondition, $context)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            if (isset($conditions['not']) && is_array($conditions['not'])) {
-                foreach ($conditions['not'] as $subCondition) {
-                    if ($this->allConditionsAreMatched($subCondition, $context)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            // If it's a plain array, treat as AND (all must match)
-            if (array_keys($conditions) === range(0, count($conditions) - 1)) {
-                foreach ($conditions as $subCondition) {
-                    if (!$this->allConditionsAreMatched($subCondition, $context)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            // If it's a single condition (associative array)
-            if (isset($conditions['attribute'])) {
-                try {
-                    return Conditions::conditionIsMatched($conditions, $context, $getRegex);
-                } catch (\Exception $e) {
-                    $this->logger->warning($e->getMessage(), [
-                        'exception' => $e,
-                        'condition' => $conditions,
-                        'context' => $context,
-                    ]);
-                    return false;
-                }
-            }
-        }
-        return false;
+        return Conditions::createFromMixed($conditions)->isSatisfiedBy($context);
     }
 
     public function segmentIsMatched(array $segment, array $context): bool
@@ -173,6 +104,7 @@ class DatafileReader
 
     public function allSegmentsAreMatched($groupSegments, array $context): bool
     {
+        var_dump($groupSegments);
         if ($groupSegments === '*') {
             return true;
         }
