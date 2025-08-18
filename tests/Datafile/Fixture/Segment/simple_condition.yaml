@@ -1,0 +1,5 @@
+description: Simple condition
+conditions:
+  - attribute: age
+    operator: greaterThan
+    value: 21

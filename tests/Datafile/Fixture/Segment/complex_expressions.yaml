@@ -1,0 +1,19 @@
+description: Complex expressions
+conditions:
+  - and:
+      - attribute: device
+        operator: startsWith
+        value: iPhone
+      - not:
+        - or:
+            - attribute: country
+              operator: equals
+              value: us
+            - attribute: country
+              operator: equals
+              value: ca
+  - not:
+      - attribute: age
+        operator: lessThan
+        value: 21
+
