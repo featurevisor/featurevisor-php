@@ -26,10 +26,14 @@ final class SemverLessThanCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
+        $valueFromContext = $this->getValueFromContext($context, $this->attribute);
+        if ($valueFromContext === null) {
+            return false;
+        }
         $comparator = new VersionComparator();
 
         return $comparator(
-            new Semver($this->getValueFromContext($context, $this->attribute)),
+            new Semver($valueFromContext),
             $this->value
         ) === -1;
     }

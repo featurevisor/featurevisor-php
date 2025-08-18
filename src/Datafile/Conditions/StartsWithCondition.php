@@ -20,6 +20,6 @@ final class StartsWithCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return str_starts_with($this->getValueFromContext($context, $this->attribute), $this->value);
+        return str_starts_with((string) $this->getValueFromContext($context, $this->attribute), $this->value);
     }
 }

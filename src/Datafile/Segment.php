@@ -61,14 +61,14 @@ final class Segment
         return $this->archived;
     }
 
-    public function getConditions(): Conditions
-    {
-        return $this->conditions;
-    }
-
     public function getDescription(): string
     {
         return $this->description;
+    }
+
+    public function allConditionsAreMatched(array $context): bool
+    {
+        return $this->conditions->isSatisfiedBy($context);
     }
 
 }

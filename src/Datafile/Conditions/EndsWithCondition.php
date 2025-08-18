@@ -20,6 +20,6 @@ final class EndsWithCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return str_ends_with($this->getValueFromContext($context, $this->attribute), $this->value);
+        return str_ends_with((string) $this->getValueFromContext($context, $this->attribute), $this->value);
     }
 }

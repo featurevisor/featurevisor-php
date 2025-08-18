@@ -2,6 +2,7 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Datafile\Segment;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\DatafileReader;
@@ -56,9 +57,9 @@ class DatafileReaderTest extends TestCase {
         ]);
         self::assertEquals('1', $reader->getRevision());
         self::assertEquals('2', $reader->getSchemaVersion());
-        self::assertEquals($datafileJson['segments']['netherlands'], $reader->getSegment('netherlands'));
-        self::assertEquals('de', $reader->getSegment('germany')['conditions'][0]['value']);
-        self::assertNull($reader->getSegment('belgium'));
+        self::assertEquals($datafileJson['segments']['netherlands'], $reader->findSegment('netherlands'));
+        self::assertEquals('de', $reader->findSegment('germany')['conditions'][0]['value']);
+        self::assertNull($reader->findSegment('belgium'));
         self::assertEquals($datafileJson['features']['test'], $reader->getFeature('test'));
         self::assertNull($reader->getFeature('test2'));
     }

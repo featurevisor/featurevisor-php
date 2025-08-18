@@ -12,6 +12,10 @@ final class ConditionFactory
 {
     public function create(array $conditions): ConditionInterface
     {
+        if (array_key_exists('attribute', $conditions)) {
+            return $this->createCondition($conditions);
+        }
+
         $mappedConditions = array_map(fn ($condition) => $this->map($condition), $conditions);
 
         if (count($mappedConditions) === 1) {
@@ -44,13 +48,12 @@ final class ConditionFactory
 
     private function createCondition(array $condition): ConditionInterface
     {
-        if (!isset($condition['attribute']) || !isset($condition['operator']) || !isset($condition['value'])) {
-            var_dump($condition);
+        if (!isset($condition['attribute']) || !isset($condition['operator'])) {
             throw new InvalidArgumentException('Invalid condition format');
         }
 
         $attribute = $condition['attribute'];
-        $value = $condition['value'];
+        $value = $condition['value'] ?? null;
 
         switch ($condition['operator']) {
             case 'after':
@@ -88,9 +91,13 @@ final class ConditionFactory
             case 'lessThanOrEquals':
                 return new LessThanOrEqualsCondition($attribute, $value);
             case 'matches':
-                return new MatchesCondition($attribute, sprintf('/%s/%s', $value, $condition['regexFlags']));
+                return new MatchesCondition($attribute, sprintf('/%s/%s', $value, $condition['regexFlags'] ?? ''));
+            case 'notMatches':
+                return new NotCondition(new MatchesCondition($attribute, sprintf('/%s/%s', $value, $condition['regexFlags'] ?? '')));
             case 'semverEquals':
                 return new SemverEqualsCondition($attribute, $value);
+            case 'semverNotEquals':
+                return new NotCondition(new SemverEqualsCondition($attribute, $value));
             case 'semverGreaterThan':
                 return new SemverGreaterThanCondition($attribute, $value);
             case 'semverGreaterThanOrEquals':

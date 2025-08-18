@@ -20,6 +20,6 @@ final class MatchesCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return preg_match($this->regex, $this->getValueFromContext($context, $this->attribute)) === 1;
+        return preg_match($this->regex, (string) $this->getValueFromContext($context, $this->attribute)) === 1;
     }
 }

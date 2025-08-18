@@ -16,7 +16,7 @@ final class LessThanOrEqualsCondition implements ConditionInterface
 
     public function __construct(string $attribute, $value)
     {
-        if (is_int($value) === false || is_float($value) === false) {
+        if (is_int($value) === false && is_float($value) === false) {
             throw new \InvalidArgumentException('LessThanOrEqualsCondition value must be float or integer');
         }
 

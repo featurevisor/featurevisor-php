@@ -291,8 +291,8 @@ class ConditionsTest extends TestCase {
             [ 'attribute' => 'browser_version', 'operator' => 'equals', 'value' => '1.0' ],
         ]]];
         self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'firefox', 'browser_version' => '2.0']));
-        self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome']));
-        self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome', 'browser_version' => '2.0']));
+        self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome']));
+        self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome', 'browser_version' => '2.0']));
         self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome', 'browser_version' => '1.0']));
     }
 

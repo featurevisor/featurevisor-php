@@ -8,6 +8,7 @@ namespace Featurevisor\Datafile;
 use Featurevisor\Datafile\Conditions\ConditionFactory;
 use Featurevisor\Datafile\Conditions\ConditionInterface;
 use Featurevisor\Datafile\Conditions\EveryoneCondition;
+use Featurevisor\Datafile\Conditions\NotCondition;
 
 final class Conditions implements ConditionInterface
 {
@@ -21,6 +22,10 @@ final class Conditions implements ConditionInterface
     {
         if ($conditions === '*') {
             return new self(new EveryoneCondition());
+        }
+
+        if (is_string($conditions)) { // Unsupported string condition
+            return new self(new NotCondition(new EveryoneCondition()));
         }
 
         if (is_array($conditions) === false) {

@@ -6,6 +6,7 @@ namespace Featurevisor\Datafile\Conditions;
 
 
 use DateTimeImmutable;
+use DateTimeInterface;
 
 final class BeforeCondition implements ConditionInterface
 {
@@ -22,8 +23,23 @@ final class BeforeCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        $contextDate = new DateTimeImmutable($this->getValueFromContext($context, $this->attribute));
+        try {
+            $valueFromContext = $this->getValueFromContext($context, $this->attribute);
+            if ($valueFromContext === null) {
+                return false;
+            }
+            if ($valueFromContext instanceof DateTimeInterface) {
+                $contextDate = DateTimeImmutable::createFromFormat(
+                    DateTimeInterface::RFC3339,
+                    $valueFromContext->format(DateTimeInterface::RFC3339)
+                );
+            } else {
+                $contextDate = new DateTimeImmutable($valueFromContext);
+            }
 
-        return $contextDate < $this->value;
+            return $contextDate < $this->value;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

@@ -20,6 +20,6 @@ final class ContainsCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return str_contains($this->getValueFromContext($context, $this->attribute), $this->value);
+        return str_contains((string) $this->getValueFromContext($context, $this->attribute), $this->value);
     }
 }

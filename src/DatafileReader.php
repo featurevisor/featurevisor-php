@@ -3,6 +3,7 @@
 namespace Featurevisor;
 
 use Featurevisor\Datafile\Conditions;
+use Featurevisor\Datafile\Segment;
 use Psr\Log\LoggerInterface;
 
 class DatafileReader
@@ -36,7 +37,7 @@ class DatafileReader
         return $this->schemaVersion;
     }
 
-    public function getSegment(string $segmentKey): ?array
+    public function findSegment(string $segmentKey): ?array
     {
         $segment = $this->segments[$segmentKey] ?? null;
 
@@ -97,21 +98,15 @@ class DatafileReader
         return Conditions::createFromMixed($conditions)->isSatisfiedBy($context);
     }
 
-    public function segmentIsMatched(array $segment, array $context): bool
-    {
-        return $this->allConditionsAreMatched($segment['conditions'], $context);
-    }
-
     public function allSegmentsAreMatched($groupSegments, array $context): bool
     {
-        var_dump($groupSegments);
         if ($groupSegments === '*') {
             return true;
         }
 
         if (is_string($groupSegments)) {
-            $segment = $this->getSegment($groupSegments);
-            return $segment ? $this->segmentIsMatched($segment, $context) : false;
+            $segment = $this->findSegment($groupSegments);
+            return $segment !== null ? Segment::createFromArray($segment)->allConditionsAreMatched($context) : false;
         }
 
         // Logical operators

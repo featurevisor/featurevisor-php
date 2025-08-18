@@ -26,6 +26,11 @@ final class LessThanCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return $this->getValueFromContext($context, $this->attribute) < $this->value;
+        $valueFromContext = $this->getValueFromContext($context, $this->attribute);
+        if ($valueFromContext === null) {
+            return false;
+        }
+
+        return $valueFromContext < $this->value;
     }
 }
