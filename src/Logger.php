@@ -39,7 +39,7 @@ class Logger implements LoggerInterface
     public function __construct(array $options = [])
     {
         $this->level = $options['level'] ?? self::DEFAULT_LEVEL;
-        $this->handler = $options['handler'] ?? self::defaultLogHandler(...);
+        $this->handler = $options['handler'] ?? static fn ($level, $message, array $context) => self::defaultLogHandler($level, $message, $context);
     }
 
     public function setLevel(string $level): void
@@ -51,7 +51,7 @@ class Logger implements LoggerInterface
         $this->level = $level;
     }
 
-    public function log($level, string|Stringable $message, array $context = []): void
+    public function log($level, $message, array $context = []): void
     {
         $shouldHandle = array_search($this->level, self::ALL_LEVELS) >= array_search($level, self::ALL_LEVELS);
 
@@ -62,7 +62,7 @@ class Logger implements LoggerInterface
         ($this->handler)($level, self::MSG_PREFIX.' '.$message, $context);
     }
 
-    public static function defaultLogHandler(string $level, string $message, $details = null): void
+    public static function defaultLogHandler($level, $message, ?array $details = null): void
     {
         if (STDOUT === false) {
             return;

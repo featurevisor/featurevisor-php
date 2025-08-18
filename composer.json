@@ -38,16 +38,19 @@
     }
   },
   "require": {
-    "psr/log": "^2.0"
+    "php": "^7.4 || ^8.0",
+    "ext-json": "*",
+    "psr/log": "^1.1"
   },
   "require-dev": {
-    "php": "^8.0",
-    "phpunit/phpunit": "^10"
+    "phpunit/phpunit": "^9",
+    "phpstan/phpstan": "^2.1"
   },
   "bin": [
     "featurevisor"
   ],
   "scripts": {
+    "sast": "phpstan analyse --memory-limit=256M",
     "test": "phpunit tests"
   },
   "license": [

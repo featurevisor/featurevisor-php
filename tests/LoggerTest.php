@@ -68,7 +68,7 @@ class LoggerTest extends TestCase
 
     public function testLoggerConstructorUsesProvidedLogLevel(): void
     {
-        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::DEBUG);
 
         $logger->debug('debug message');
 
@@ -77,7 +77,7 @@ class LoggerTest extends TestCase
 
     public function testLoggerConstructorUsesDefaultHandlerWhenNoneProvided(): void
     {
-        $logger = new Logger(['handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger();
 
         $logger->info('test message');
 
@@ -100,9 +100,9 @@ class LoggerTest extends TestCase
         self::assertTrue($customHandlerCalled);
     }
 
-    public function testSetLevelUpdatesTheLogLevel()
+    public function testSetLevelUpdatesTheLogLevel(): void
     {
-        $logger = new Logger(['level' => LogLevel::INFO, 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::INFO);
 
         // Debug should not be logged initially
         $logger->debug('first debug message');
@@ -117,10 +117,12 @@ class LoggerTest extends TestCase
         );
     }
 
-    #[DataProvider('levelsLoggingTestDataProvider')]
+    /**
+     * @dataProvider levelsLoggingTestDataProvider
+     */
     public function testLogErrorMessagesAtAllLevels(string $level): void
     {
-        $logger = new Logger(['level' => $level, 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger($level);
 
         $logger->error('error message');
 
@@ -132,7 +134,7 @@ class LoggerTest extends TestCase
 
     public function testLogWarnMessagesAtWarnLevelAndAbove(): void
     {
-        $logger = new Logger(['level' => LogLevel::WARNING, 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::WARNING);
 
         $logger->warning('warn message');
         $logger->error('error message');
@@ -146,7 +148,7 @@ class LoggerTest extends TestCase
 
     public function testNotLogInfoMessagesAtWarnLevel(): void
     {
-        $logger = new Logger(['level' => LogLevel::WARNING, 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::WARNING);
 
         $logger->info('info message');
 
@@ -155,7 +157,7 @@ class LoggerTest extends TestCase
 
     public function testNotLogDebugMessagesAtInfoLevel(): void
     {
-        $logger = new Logger(['level' => 'info', 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::INFO);
 
         $logger->debug('debug message');
 
@@ -164,7 +166,7 @@ class LoggerTest extends TestCase
 
     public function testLogAllMessagesAtDebugLevel(): void
     {
-        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::DEBUG);
 
         $logger->debug('debug message');
         $logger->info('info message');
@@ -182,7 +184,7 @@ class LoggerTest extends TestCase
 
     public function testHandleDetailsParameter(): void
     {
-        $logger = new Logger(['level' => 'debug', 'handler' => $this->spyHandler(...)]);
+        $logger = $this->getLogger(LogLevel::DEBUG);
         $details = ['key' => 'value', 'number' => 42];
 
         $logger->info('message with details', $details);
@@ -224,10 +226,11 @@ class LoggerTest extends TestCase
         self::assertFalse($customHandlerCalled);
     }
 
-    private function spyHandler(string $level, string|Stringable $message, array $context): void
+    private function getLogger(string $level = Logger::DEFAULT_LEVEL): Logger
     {
-        $context = $context !== [] ? ' ' . json_encode($context, JSON_THROW_ON_ERROR) : '';
-
-        $this->logBuffer .= $message.$context.PHP_EOL;
+        return new Logger(['level' => $level, 'handler' => function ($level, $message, array $context) {
+            $context = $context !== [] ? ' ' . json_encode($context, JSON_THROW_ON_ERROR) : '';
+            $this->logBuffer .= $message.$context.PHP_EOL;
+        }]);
     }
 }
