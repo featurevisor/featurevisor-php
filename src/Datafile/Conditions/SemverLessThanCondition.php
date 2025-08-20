@@ -13,7 +13,7 @@ final class SemverLessThanCondition implements ConditionInterface
     use ContextLookup, CompositeCondition;
 
     private string $attribute;
-    private Semver $value;
+    private string $value;
 
     /**
      * @throws InvalidArgumentException
@@ -21,7 +21,7 @@ final class SemverLessThanCondition implements ConditionInterface
     public function __construct(string $attribute, string $value)
     {
         $this->attribute = $attribute;
-        $this->value = new Semver($value);
+        $this->value = $value;
     }
 
     public function isSatisfiedBy(array $context): bool
@@ -32,9 +32,13 @@ final class SemverLessThanCondition implements ConditionInterface
         }
         $comparator = new VersionComparator();
 
-        return $comparator(
-            new Semver($valueFromContext),
-            $this->value
-        ) === -1;
+        try {
+            return $comparator(
+                    new Semver($valueFromContext),
+                    new Semver($this->value)
+                ) === -1;
+        } catch (InvalidArgumentException $e) {
+            return false;
+        }
     }
 }
