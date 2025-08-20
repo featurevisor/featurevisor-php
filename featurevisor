@@ -11,7 +11,7 @@ use function Featurevisor\createLogger;
 /**
  * CLI Options
  */
-function parseCliOption(array $argv, string $key): mixed {
+function parseCliOption(array $argv, string $key) {
     $prefix = '--' . $key;
     foreach ($argv as $arg) {
         // Handle boolean flags without value
