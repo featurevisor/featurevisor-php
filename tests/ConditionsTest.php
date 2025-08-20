@@ -3,6 +3,7 @@
 namespace Featurevisor\Tests;
 
 use DateTime;
+use Featurevisor\Datafile\Conditions;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\DatafileReader;
@@ -354,5 +355,23 @@ class ConditionsTest extends TestCase {
         self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['country' => 'nl', 'browser_type' => 'firefox', 'device_type' => 'mobile', 'orientation' => 'portrait']));
         self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'firefox', 'browser_version' => '2.0']));
         self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['country' => 'de', 'browser_type' => 'firefox', 'device_type' => 'desktop']));
+    }
+
+    public function testEuropeConditions()
+    {
+        $conditions = Conditions::createFromMixed([
+            [
+                'attribute' => 'continent',
+                'operator' => 'equals',
+                'value' => 'europe',
+            ],
+            [
+                'attribute' => 'country',
+                'operator' => 'notIn',
+                'value' => ['gb'],
+            ]
+        ]);
+
+        self::assertFalse($conditions->isSatisfiedBy(['country' => ['foo' => 'bar']]));
     }
 }

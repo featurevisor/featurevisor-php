@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Featurevisor\Datafile\Conditions;
 
 
+use Featurevisor\Datafile\AttributeException;
+
 final class OrCondition implements ConditionInterface
 {
     /** @var array<ConditionInterface> */
@@ -18,8 +20,12 @@ final class OrCondition implements ConditionInterface
     public function isSatisfiedBy(array $context): bool
     {
         foreach ($this->conditions as $condition) {
-            if ($condition->isSatisfiedBy($context) === true) {
-                return true;
+            try {
+                if ($condition->isSatisfiedBy($context) === true) {
+                    return true;
+                }
+            } catch (AttributeException $e) {
+                continue;
             }
         }
 

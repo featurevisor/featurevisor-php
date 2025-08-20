@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Featurevisor\Tests\Datafile\Conditions;
 
 use Featurevisor\Datafile\Conditions\InCondition;
+use Featurevisor\Datafile\Conditions\NotCondition;
 use PHPUnit\Framework\TestCase;
 
 class InConditionTest extends TestCase
@@ -107,5 +108,16 @@ class InConditionTest extends TestCase
         $this->expectExceptionMessage('InCondition value must be array of strings');
 
         new InCondition('country', ['us', 42]);
+    }
+
+    public function testNotInConditionWithMissingAttribute(): void
+    {
+        $context = [
+            'country' => 'us',
+        ];
+
+        $condition = new NotCondition(new InCondition('continent', ['europe']));
+
+        self::assertFalse($condition->isSatisfiedBy($context));
     }
 }

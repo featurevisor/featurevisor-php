@@ -63,5 +63,14 @@ class SegmentTest extends TestCase
                 false
             )
         ];
+
+        yield 'switzerland' => [
+            SegmentFixture::switzerland(),
+            new Segment(
+                'users from Switzerland',
+                new Conditions(new Conditions\AndCondition(new Conditions\EqualsCondition('country', 'ch'))),
+                false
+            )
+        ];
     }
 }

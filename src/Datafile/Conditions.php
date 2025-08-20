@@ -44,6 +44,10 @@ final class Conditions implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return $this->expression->isSatisfiedBy($context);
+        try {
+            return $this->expression->isSatisfiedBy($context);
+        } catch (AttributeException $e) {
+            return false;
+        }
     }
 }

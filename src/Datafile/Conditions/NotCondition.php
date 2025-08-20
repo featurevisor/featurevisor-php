@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Featurevisor\Datafile\Conditions;
 
 
+use Featurevisor\Datafile\AttributeException;
+
 final class NotCondition implements ConditionInterface
 {
     private ConditionInterface $specification;
@@ -16,6 +18,10 @@ final class NotCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        return $this->specification->isSatisfiedBy($context) === false;
+        try {
+            return $this->specification->isSatisfiedBy($context) === false;
+        } catch (AttributeException $e) {
+            return false;
+        }
     }
 }

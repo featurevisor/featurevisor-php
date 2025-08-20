@@ -12,8 +12,8 @@ final class ConditionFactory
 {
     public function create(array $conditions): ConditionInterface
     {
-        if (array_key_exists('attribute', $conditions)) {
-            return $this->createCondition($conditions);
+        if (array_is_list($conditions) === false) {
+            return $this->map($conditions);
         }
 
         $mappedConditions = array_map(fn ($condition) => $this->map($condition), $conditions);
