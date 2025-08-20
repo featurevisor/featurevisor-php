@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\SemverEqualsCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -96,13 +97,14 @@ class SemverEqualsConditionTest extends TestCase
 
     public function testSemverEqualsConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => '1.2.3',
         ];
-
         $condition = new SemverEqualsCondition('version', '1.2.3');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testSemverEqualsConditionWithInvalidVersionFormat(): void
@@ -110,10 +112,8 @@ class SemverEqualsConditionTest extends TestCase
         $context = [
             'version' => 'not-a-version',
         ];
-
         $condition = new SemverEqualsCondition('version', '1.2.3');
 
-        $this->expectException(\InvalidArgumentException::class);
-        $condition->isSatisfiedBy($context);
+        self::assertFalse($condition->isSatisfiedBy($context));
     }
 }

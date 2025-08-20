@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\EqualsCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -33,13 +34,14 @@ class EqualsConditionTest extends TestCase
 
     public function testEqualsConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'value',
         ];
-
         $condition = new EqualsCondition('country', 'us');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testEqualsConditionWithNestedAttributeMatching(): void
@@ -74,6 +76,8 @@ class EqualsConditionTest extends TestCase
 
     public function testEqualsConditionWithMissingNestedAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'user' => [
                 'profile' => [
@@ -81,10 +85,9 @@ class EqualsConditionTest extends TestCase
                 ],
             ],
         ];
-
         $condition = new EqualsCondition('user.profile.country', 'us');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testEqualsConditionWithDifferentTypes(): void

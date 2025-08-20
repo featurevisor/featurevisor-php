@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\ContainsCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -33,13 +34,14 @@ class ContainsConditionTest extends TestCase
 
     public function testContainsConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'iPhone 12',
         ];
-
         $condition = new ContainsCondition('device', 'iPhone');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testContainsConditionWithNestedAttributeContaining(): void

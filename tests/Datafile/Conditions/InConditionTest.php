@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\InCondition;
 use Featurevisor\Datafile\Conditions\NotCondition;
 use PHPUnit\Framework\TestCase;
@@ -34,13 +35,14 @@ class InConditionTest extends TestCase
 
     public function testInConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'us',
         ];
-
         $condition = new InCondition('country', ['us', 'ca', 'uk']);
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testInConditionWithNestedAttributeInArray(): void
@@ -112,12 +114,13 @@ class InConditionTest extends TestCase
 
     public function testNotInConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'country' => 'us',
         ];
-
         $condition = new NotCondition(new InCondition('continent', ['europe']));
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 }

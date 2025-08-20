@@ -23,8 +23,8 @@ final class BeforeCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
+        $valueFromContext = $this->getValueFromContext($context, $this->attribute);
         try {
-            $valueFromContext = $this->getValueFromContext($context, $this->attribute);
             if ($valueFromContext === null) {
                 return false;
             }

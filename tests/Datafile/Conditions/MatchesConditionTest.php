@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\MatchesCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -33,13 +34,14 @@ class MatchesConditionTest extends TestCase
 
     public function testMatchesConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'user@example.com',
         ];
-
         $condition = new MatchesCondition('email', '/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testMatchesConditionWithNestedAttributeMatching(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\SemverLessThanCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -107,13 +108,14 @@ class SemverLessThanConditionTest extends TestCase
 
     public function testSemverLessThanConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => '1.2.2',
         ];
-
         $condition = new SemverLessThanCondition('version', '1.2.3');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testSemverLessThanConditionWithInvalidVersionFormat(): void
@@ -124,7 +126,6 @@ class SemverLessThanConditionTest extends TestCase
 
         $condition = new SemverLessThanCondition('version', '1.2.3');
 
-        $this->expectException(\InvalidArgumentException::class);
-        $condition->isSatisfiedBy($context);
+        self::assertFalse($condition->isSatisfiedBy($context));
     }
 }

@@ -18,10 +18,6 @@ final class NotCondition implements ConditionInterface
 
     public function isSatisfiedBy(array $context): bool
     {
-        try {
-            return $this->specification->isSatisfiedBy($context) === false;
-        } catch (AttributeException $e) {
-            return false;
-        }
+        return $this->specification->isSatisfiedBy($context) === false;
     }
 }

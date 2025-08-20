@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\GreaterThanCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -44,13 +45,14 @@ class GreaterThanConditionTest extends TestCase
 
     public function testGreaterThanConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 25,
         ];
-
         $condition = new GreaterThanCondition('age', 21);
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testGreaterThanConditionWithNestedAttributeGreater(): void

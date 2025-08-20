@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Featurevisor\Tests\Datafile\Conditions;
 
 use DateTimeImmutable;
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\BeforeCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -75,13 +76,14 @@ class BeforeConditionTest extends TestCase
 
     public function testBeforeConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => '2022-12-15',
         ];
-
         $condition = new BeforeCondition('date', new DateTimeImmutable('2023-01-01'));
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testBeforeConditionWithInvalidDateFormat(): void

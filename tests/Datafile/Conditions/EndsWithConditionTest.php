@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\EndsWithCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -33,13 +34,14 @@ class EndsWithConditionTest extends TestCase
 
     public function testEndsWithConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'My iPhone',
         ];
-
         $condition = new EndsWithCondition('device', 'iPhone');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testEndsWithConditionWithNestedAttributeEndingWith(): void

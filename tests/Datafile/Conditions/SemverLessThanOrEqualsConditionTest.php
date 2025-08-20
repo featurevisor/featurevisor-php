@@ -139,7 +139,6 @@ class SemverLessThanOrEqualsConditionTest extends TestCase
 
         $condition = new SemverLessThanOrEqualsCondition('version', '1.2.3');
 
-        $this->expectException(\InvalidArgumentException::class);
-        $condition->isSatisfiedBy($context);
+        self::assertFalse($condition->isSatisfiedBy($context));
     }
 }

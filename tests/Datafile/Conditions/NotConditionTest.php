@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\EqualsCondition;
 use Featurevisor\Datafile\Conditions\GreaterThanCondition;
 use Featurevisor\Datafile\Conditions\NotCondition;
@@ -39,15 +40,16 @@ class NotConditionTest extends TestCase
 
     public function testNotConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => 'value',
         ];
-
         $condition = new NotCondition(
             new EqualsCondition('country', 'us')
         );
 
-        self::assertTrue($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testNotConditionWithNestedCondition(): void

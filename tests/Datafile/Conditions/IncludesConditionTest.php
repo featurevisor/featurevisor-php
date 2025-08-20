@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Featurevisor\Tests\Datafile\Conditions;
 
+use Featurevisor\Datafile\AttributeException;
 use Featurevisor\Datafile\Conditions\IncludesCondition;
 use PHPUnit\Framework\TestCase;
 
@@ -33,13 +34,14 @@ class IncludesConditionTest extends TestCase
 
     public function testIncludesConditionWithMissingAttribute(): void
     {
+        $this->expectException(AttributeException::class);
+
         $context = [
             'other_attribute' => ['us', 'ca', 'uk'],
         ];
-
         $condition = new IncludesCondition('countries', 'us');
 
-        self::assertFalse($condition->isSatisfiedBy($context));
+        $condition->isSatisfiedBy($context);
     }
 
     public function testIncludesConditionWithNestedArrayIncludingValue(): void
