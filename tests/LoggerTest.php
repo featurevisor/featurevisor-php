@@ -2,7 +2,6 @@
 
 namespace Featurevisor\Tests;
 
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Logger;

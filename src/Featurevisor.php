@@ -2,6 +2,7 @@
 
 namespace Featurevisor;
 
+use Closure;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -265,6 +266,7 @@ class Featurevisor
      *     reason: string,
      *     bucketKey: string,
      *     bucketValue: string,
+     *     variation: array<string, mixed>,
      *     enabled: bool,
      *     error?: string,
      * }
