@@ -53,7 +53,7 @@ class EventsTest extends TestCase
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -63,7 +63,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',
@@ -92,7 +92,7 @@ class EventsTest extends TestCase
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -105,7 +105,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',
@@ -135,7 +135,7 @@ class EventsTest extends TestCase
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -148,7 +148,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',

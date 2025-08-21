@@ -5,47 +5,62 @@ namespace Featurevisor;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
-class Instance
+class Featurevisor
 {
-    private array $context = [];
+    private array $context;
     private LoggerInterface $logger;
-    private ?array $sticky = null;
+    private ?array $sticky;
     private DatafileReader $datafileReader;
     private HooksManager $hooksManager;
     private Emitter $emitter;
 
-    public function __construct(array $options = [])
+    /**
+     * @param array{
+     *     datafile?: string|array,
+     *     logger?: LoggerInterface,
+     *     context?: array<string, mixed>,
+     *     sticky?: array<string, mixed>,
+     *     hooks?: array<array{
+     *         name: string,
+     *         before: Closure,
+     *         after: Closure,
+     *         bucketKey: Closure,
+     *         bucketValue: Closure
+     *    }>
+     * } $options
+     * @return self
+     */
+    public static function createInstance(array $options): self
     {
-        // from options
-        $this->context = $options['context'] ?? [];
-        $this->logger = $options['logger'] ?? new NullLogger();
-        $this->hooksManager = new HooksManager([
-            'hooks' => $options['hooks'] ?? [],
-            'logger' => $this->logger
-        ]);
-        $this->emitter = new Emitter();
-        $this->sticky = $options['sticky'] ?? null;
+        $logger = $options['logger'] ?? new NullLogger();
 
-        // datafile
-        $emptyDatafile = [
-            'schemaVersion' => '2',
-            'revision' => 'unknown',
-            'segments' => [],
-            'features' => []
-        ];
+        return new self(
+            isset($options['datafile'])
+                ? DatafileReader::createFromMixed($options['datafile'], $logger)
+                : DatafileReader::createEmpty($logger),
+            $logger,
+            HooksManager::createFromOptions($options),
+            new Emitter(),
+            $options['context'] ?? [],
+            $options['sticky'] ?? null
+        );
+    }
 
-        $this->datafileReader = new DatafileReader([
-            'datafile' => $emptyDatafile,
-            'logger' => $this->logger
-        ]);
-
-        if (isset($options['datafile'])) {
-            $datafile = is_string($options['datafile']) ? json_decode($options['datafile'], true) : $options['datafile'];
-            $this->datafileReader = new DatafileReader([
-                'datafile' => $datafile,
-                'logger' => $this->logger
-            ]);
-        }
+    public function __construct(
+        DatafileReader $datafile,
+        LoggerInterface $logger,
+        HooksManager $hooksManager,
+        Emitter $emitter,
+        array $context = [],
+        ?array $sticky = null
+    )
+    {
+        $this->datafileReader = $datafile;
+        $this->logger = $logger;
+        $this->hooksManager = $hooksManager;
+        $this->sticky = $sticky;
+        $this->emitter = $emitter;
+        $this->context = $context;
 
         $this->logger->info('Featurevisor SDK initialized');
     }
@@ -53,10 +68,7 @@ class Instance
     public function setDatafile($datafile): void
     {
         try {
-            $newDatafileReader = new DatafileReader([
-                'datafile' => is_string($datafile) ? json_decode($datafile, true) : $datafile,
-                'logger' => $this->logger
-            ]);
+            $newDatafileReader = DatafileReader::createFromMixed($datafile, $this->logger);
 
             $details = Events::getParamsForDatafileSetEvent($this->datafileReader, $newDatafileReader);
 

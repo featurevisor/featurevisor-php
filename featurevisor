@@ -255,7 +255,7 @@ function testSegment(array $assertion, array $segment, string $level): array {
         'segments' => []
     ];
 
-    $datafileReader = new DatafileReader([
+    $datafileReader = DatafileReader::createFromOptions([
         'datafile' => $datafile,
         'logger' => createLogger([
             'level' => $level,

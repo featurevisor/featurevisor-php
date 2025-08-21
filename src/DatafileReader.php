@@ -3,9 +3,17 @@
 namespace Featurevisor;
 
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 class DatafileReader
 {
+    private const EMPTY_CONTENT = [
+        'schemaVersion' => '2',
+        'revision' => 'unknown',
+        'segments' => [],
+        'features' => []
+    ];
+
     private string $schemaVersion;
     private string $revision;
     private array $segments;
@@ -13,15 +21,57 @@ class DatafileReader
     private LoggerInterface $logger;
     private array $regexCache;
 
-    public function __construct(array $options)
+    public static function createEmpty(LoggerInterface $logger): self
     {
-        $datafile = $options['datafile'];
-        $this->logger = $options['logger'];
+        return self::createFromOptions([
+            'datafile' => self::EMPTY_CONTENT,
+            'logger' => $logger,
+        ]);
+    }
 
-        $this->schemaVersion = $datafile['schemaVersion'];
-        $this->revision = $datafile['revision'];
-        $this->segments = $datafile['segments'];
-        $this->features = $datafile['features'];
+    public static function createFromMixed($datafile, LoggerInterface $logger): self
+    {
+        return is_string($datafile)
+            ? self::createFromJson($datafile, $logger)
+            : self::createFromOptions([
+                'datafile' => $datafile,
+                'logger' => $logger,
+            ]);
+    }
+
+    /**
+     * @throws \JsonException
+     */
+    public static function createFromJson(string $json, LoggerInterface $logger): self
+    {
+        $decodedDatafile = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
+        return self::createFromOptions([
+            'datafile' => $decodedDatafile,
+            'logger' => $logger
+        ]);
+    }
+
+    public static function createFromOptions(array $data): self
+    {
+        if (array_key_exists('datafile', $data) === false ) {
+            throw new \InvalidArgumentException('Missing datafile key in data array');
+        }
+
+        return new self(
+            $data['datafile'],
+            $data['logger'] ?? null
+        );
+    }
+
+    public function __construct(array $datafileContent, ?LoggerInterface $logger = null)
+    {
+        $this->logger = $logger ?? new NullLogger();
+
+        $this->schemaVersion = $datafileContent['schemaVersion'];
+        $this->revision = $datafileContent['revision'];
+        $this->segments = $datafileContent['segments'];
+        $this->features = $datafileContent['features'];
         $this->regexCache = [];
     }
 

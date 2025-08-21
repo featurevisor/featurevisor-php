@@ -2,9 +2,9 @@
 
 namespace Featurevisor;
 
-function createInstance(array $options = []): Instance
+function createInstance(array $options = []): Featurevisor
 {
-    return new Instance($options);
+    return Featurevisor::createInstance($options);
 }
 
 function createLogger(array $options = []): Logger

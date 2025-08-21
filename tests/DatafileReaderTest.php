@@ -50,7 +50,7 @@ class DatafileReaderTest extends TestCase {
             ],
         ];
         $logger = createLogger();
-        $reader = new DatafileReader([
+        $reader = DatafileReader::createFromOptions([
             'datafile' => $datafileJson,
             'logger' => $logger,
         ]);
@@ -113,7 +113,7 @@ class DatafileReaderTest extends TestCase {
             ],
         ];
         $logger = createLogger();
-        $datafileReader = new DatafileReader([
+        $datafileReader = DatafileReader::createFromOptions([
             'datafile' => $datafileContent,
             'logger' => $logger,
         ]);

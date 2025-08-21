@@ -13,15 +13,7 @@ class ConditionsTest extends TestCase {
 
     protected function setUp(): void {
         $logger = createLogger();
-        $this->datafileReader = new DatafileReader([
-            'datafile' => [
-                'schemaVersion' => '2.0',
-                'revision' => '1',
-                'segments' => [],
-                'features' => [],
-            ],
-            'logger' => $logger,
-        ]);
+        $this->datafileReader = DatafileReader::createEmpty($logger);
     }
 
     public function testMatchAllViaStar() {
