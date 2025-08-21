@@ -2,6 +2,9 @@
 
 namespace Featurevisor;
 
+use Exception;
+use InvalidArgumentException;
+use JsonException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -29,6 +32,10 @@ class DatafileReader
         ]);
     }
 
+    /**
+     * @param string|array<string, mixed> $datafile
+     * @throws JsonException
+     */
     public static function createFromMixed($datafile, LoggerInterface $logger): self
     {
         return is_string($datafile)
@@ -40,7 +47,7 @@ class DatafileReader
     }
 
     /**
-     * @throws \JsonException
+     * @throws JsonException
      */
     public static function createFromJson(string $json, LoggerInterface $logger): self
     {
@@ -55,7 +62,7 @@ class DatafileReader
     public static function createFromOptions(array $data): self
     {
         if (array_key_exists('datafile', $data) === false ) {
-            throw new \InvalidArgumentException('Missing datafile key in data array');
+            throw new InvalidArgumentException('Missing datafile key in data array');
         }
 
         return new self(
@@ -203,7 +210,7 @@ class DatafileReader
             if (isset($conditions['attribute'])) {
                 try {
                     return Conditions::conditionIsMatched($conditions, $context, $getRegex);
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     $this->logger->warning($e->getMessage(), [
                         'exception' => $e,
                         'condition' => $conditions,

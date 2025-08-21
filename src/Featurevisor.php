@@ -16,7 +16,7 @@ class Featurevisor
 
     /**
      * @param array{
-     *     datafile?: string|array,
+     *     datafile?: string|array<string, mixed>,
      *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
@@ -65,6 +65,9 @@ class Featurevisor
         $this->logger->info('Featurevisor SDK initialized');
     }
 
+    /**
+     * @param string|array<string, mixed> $datafile
+     */
     public function setDatafile($datafile): void
     {
         try {
@@ -77,10 +80,13 @@ class Featurevisor
             $this->logger->info('datafile set', $details);
             $this->emitter->trigger('datafile_set', $details);
         } catch (\Exception $e) {
-            $this->logger->error('could not parse datafile', ['error' => $e->getMessage(), 'exception' => $e]);;
+            $this->logger->error('could not parse datafile', ['error' => $e->getMessage(), 'exception' => $e]);
         }
     }
 
+    /**
+     * @param array<string, mixed> $sticky
+     */
     public function setSticky(array $sticky, bool $replace = false): void
     {
         $previousStickyFeatures = $this->sticky ?? [];
@@ -122,6 +128,9 @@ class Featurevisor
         $this->emitter->clearAll();
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     public function setContext(array $context, bool $replace = false): void
     {
         if ($replace) {
@@ -141,11 +150,22 @@ class Featurevisor
         ]);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
     public function getContext(array $context = []): array
     {
         return !empty($context) ? array_merge($this->context, $context) : $this->context;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return Child
+     */
     public function spawn(array $context = [], array $options = []): Child
     {
         return new Child([
@@ -155,6 +175,16 @@ class Featurevisor
         ]);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array
+     */
     private function getEvaluationDependencies(array $context, array $options = []): array
     {
         $sticky = $this->sticky;
@@ -177,6 +207,24 @@ class Featurevisor
         ]);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array{
+     *     type: string,
+     *     featureKey: string,
+     *     reason: string,
+     *     bucketKey: string,
+     *     bucketValue: string,
+     *     enabled: bool,
+     *     error?: string,
+     * }
+     */
     public function evaluateFlag(string $featureKey, array $context = [], array $options = []): array
     {
         $deps = $this->getEvaluationDependencies($context, $options);
@@ -187,6 +235,15 @@ class Featurevisor
         ]));
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function isEnabled(string $featureKey, array $context = [], array $options = []): bool
     {
         $evaluation = $this->evaluateFlag($featureKey, $context, $options);
@@ -194,6 +251,24 @@ class Featurevisor
         return $evaluation['enabled'] ?? false;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array{
+     *     type: string,
+     *     featureKey: string,
+     *     reason: string,
+     *     bucketKey: string,
+     *     bucketValue: string,
+     *     enabled: bool,
+     *     error?: string,
+     * }
+     */
     public function evaluateVariation(string $featureKey, array $context = [], array $options = []): array
     {
         $deps = $this->getEvaluationDependencies($context, $options);
@@ -204,6 +279,16 @@ class Featurevisor
         ]));
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return mixed|null
+     */
     public function getVariation(string $featureKey, array $context = [], array $options = [])
     {
         try {
@@ -229,6 +314,24 @@ class Featurevisor
         }
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array{
+     *     type: string,
+     *     featureKey: string,
+     *     reason: string,
+     *     bucketKey: string,
+     *     bucketValue: string,
+     *     enabled: bool,
+     *     error?: string,
+     * }
+     */
     public function evaluateVariable(string $featureKey, string $variableKey, array $context = [], array $options = []): array
     {
         $deps = $this->getEvaluationDependencies($context, $options);
@@ -240,6 +343,16 @@ class Featurevisor
         ]));
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return mixed|null
+     */
     public function getVariable(string $featureKey, string $variableKey, array $context = [], array $options = [])
     {
         try {
@@ -271,6 +384,15 @@ class Featurevisor
         }
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -282,6 +404,15 @@ class Featurevisor
         return (bool) $value;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -293,6 +424,15 @@ class Featurevisor
         return (string) $value;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -304,6 +444,15 @@ class Featurevisor
         return (int) $value;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -315,6 +464,15 @@ class Featurevisor
         return (float) $value;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -326,6 +484,15 @@ class Featurevisor
         return is_array($value) ? $value : [$value];
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     */
     public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -337,6 +504,16 @@ class Featurevisor
         return is_array($value) ? $value : null;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array<mixed>|mixed|null
+     */
     public function getVariableJSON(string $featureKey, string $variableKey, array $context = [], array $options = [])
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
@@ -353,6 +530,17 @@ class Featurevisor
         return $value;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string> $featureKeys
+     * @param array{
+     *     defaultVariationValue?: mixed,
+     *     defaultVariableValue?: mixed,
+     *     flagEvaluation?: array<string, mixed>,
+     *     sticky?: array<string, mixed>
+     * } $options
+     * @return array<string, mixed>
+     */
     public function getAllEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
     {
         $deps = $this->getEvaluationDependencies($context, $options);
