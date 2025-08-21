@@ -2,11 +2,11 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Events;
 use Featurevisor\DatafileReader;
-use function Featurevisor\createLogger;
 
 class EventsTest extends TestCase
 {
@@ -49,7 +49,7 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventEmptyToNew()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 
@@ -88,7 +88,7 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventChangeHashAddition()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 
@@ -131,7 +131,7 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventChangeHashRemoval()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 

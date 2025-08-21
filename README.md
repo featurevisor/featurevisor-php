@@ -364,10 +364,10 @@ Setting `debug` level will print out all logs, including `info`, `warning`, and 
 
 ```php
 use Featurevisor\Featurevisor;
-use function Featurevisor\createLogger;
+use Featurevisor\Logger;
 
 $f = Featurevisor::createInstance([
-  "logger" => createLogger([
+  "logger" => Logger::create([
     "level" => "debug",
   ]),
 ]);
@@ -393,10 +393,10 @@ You can also pass your own log handler, if you do not wish to print the logs to 
 
 ```php
 use Featurevisor\Featurevisor;
-use function Featurevisor\createLogger;
+use Featurevisor\Logger;
 
 $f = Featurevisor::createInstance([
-  "logger" => createLogger([
+  "logger" => Logger::create([
     "level" => "info",
     "handler" => function ($level, $message, $details) {
       // do something with the log

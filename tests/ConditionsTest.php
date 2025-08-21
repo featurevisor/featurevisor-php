@@ -3,17 +3,15 @@
 namespace Featurevisor\Tests;
 
 use DateTime;
+use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
-
 use Featurevisor\DatafileReader;
-use function Featurevisor\createLogger;
 
 class ConditionsTest extends TestCase {
-    private $datafileReader;
+    private DatafileReader $datafileReader;
 
     protected function setUp(): void {
-        $logger = createLogger();
-        $this->datafileReader = DatafileReader::createEmpty($logger);
+        $this->datafileReader = DatafileReader::createEmpty(Logger::create());
     }
 
     public function testMatchAllViaStar() {
