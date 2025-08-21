@@ -2,17 +2,16 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Featurevisor;
 use PHPUnit\Framework\TestCase;
-
 use Psr\Log\LogLevel;
-use function Featurevisor\createInstance;
 use function Featurevisor\createLogger;
 
-class InstanceTest extends TestCase
+class FeaturevisorTest extends TestCase
 {
     public function testShouldCreateInstanceWithDatafileContent()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -28,7 +27,7 @@ class InstanceTest extends TestCase
     {
         $capturedBucketKey = '';
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -77,7 +76,7 @@ class InstanceTest extends TestCase
     {
         $capturedBucketKey = '';
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -126,7 +125,7 @@ class InstanceTest extends TestCase
     {
         $capturedBucketKey = '';
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -183,7 +182,7 @@ class InstanceTest extends TestCase
         $interceptedFeatureKey = '';
         $interceptedVariableKey = '';
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -236,7 +235,7 @@ class InstanceTest extends TestCase
         $interceptedFeatureKey = '';
         $interceptedVariableKey = '';
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -310,7 +309,7 @@ class InstanceTest extends TestCase
             'segments' => [],
         ];
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'sticky' => [
                 'test' => [
                     'enabled' => true,
@@ -346,7 +345,7 @@ class InstanceTest extends TestCase
 
     public function testShouldHonourSimpleRequiredFeatures()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -385,7 +384,7 @@ class InstanceTest extends TestCase
         self::assertFalse($sdk->isEnabled('myKey'));
 
         // enabling required should enable the feature too
-        $sdk2 = createInstance([
+        $sdk2 = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -425,7 +424,7 @@ class InstanceTest extends TestCase
     public function testShouldHonourRequiredFeaturesWithVariation()
     {
         // should be disabled because required has different variation
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -472,7 +471,7 @@ class InstanceTest extends TestCase
         self::assertFalse($sdk->isEnabled('myKey'));
 
         // child should be enabled because required has desired variation
-        $sdk2 = createInstance([
+        $sdk2 = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -522,7 +521,7 @@ class InstanceTest extends TestCase
     {
         $deprecatedCount = 0;
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -586,7 +585,7 @@ class InstanceTest extends TestCase
 
     public function testShouldCheckIfEnabledForOverriddenFlagsFromRules()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -634,7 +633,7 @@ class InstanceTest extends TestCase
     {
         $bucketValue = 10000;
 
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'hooks' => [
                 [
                     'name' => 'unit-test',
@@ -670,7 +669,7 @@ class InstanceTest extends TestCase
 
     public function testShouldGetVariation()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -750,7 +749,7 @@ class InstanceTest extends TestCase
 
     public function testShouldGetVariable()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1037,7 +1036,7 @@ class InstanceTest extends TestCase
 
     public function testShouldGetVariablesWithoutAnyVariations()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1099,7 +1098,7 @@ class InstanceTest extends TestCase
 
     public function testShouldCheckIfEnabledForIndividuallyNamedSegments()
     {
-        $sdk = createInstance([
+        $sdk = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',

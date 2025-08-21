@@ -62,14 +62,14 @@ The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/b
 ```php
 <?php
 
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
 $datafileUrl = "https://cdn.yoursite.com/datafile.json";
 
 $datafileContent = file_get_contents($datafileUrl);
 $datafileContent = json_decode($datafileContent, true);
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "datafile" => $datafileContent
 ]);
 ```
@@ -107,9 +107,9 @@ Context can be passed to SDK instance in various different ways, depending on yo
 You can set context at the time of initialization:
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "context" => [
     "deviceId" => "123",
     "country" => "nl",
@@ -278,9 +278,9 @@ For the lifecycle of the SDK instance in your application, you can set some feat
 ### Initialize with sticky
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "sticky" => [
     "myFeatureKey" => [
       "enabled" => true,
@@ -363,10 +363,10 @@ If you choose `debug` level to make the logs more verbose, you can set it at the
 Setting `debug` level will print out all logs, including `info`, `warning`, and `error` levels.
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 use function Featurevisor\createLogger;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "logger" => createLogger([
     "level" => "debug",
   ]),
@@ -376,7 +376,7 @@ $f = createInstance([
 Alternatively, you can also set `logLevel` directly:
 
 ```php
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "logLevel" => "debug",
 ]);
 ```
@@ -392,10 +392,10 @@ $f->setLogLevel("debug");
 You can also pass your own log handler, if you do not wish to print the logs to the console:
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 use function Featurevisor\createLogger;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "logger" => createLogger([
     "level" => "info",
     "handler" => function ($level, $message, $details) {
@@ -566,9 +566,9 @@ $myCustomHook = [
 You can register hooks at the time of SDK initialization:
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   'hooks' => [
     $myCustomHook
   ],

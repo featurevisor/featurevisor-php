@@ -2,13 +2,12 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Featurevisor;
 use PHPUnit\Framework\TestCase;
-
-use function Featurevisor\createInstance;
 
 class ChildTest extends TestCase {
     public function testCreateChildInstanceAndAllBehaviors() {
-        $f = createInstance([
+        $f = Featurevisor::createInstance([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
