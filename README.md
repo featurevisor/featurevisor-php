@@ -62,14 +62,14 @@ The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/b
 ```php
 <?php
 
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
 $datafileUrl = "https://cdn.yoursite.com/datafile.json";
 
 $datafileContent = file_get_contents($datafileUrl);
 $datafileContent = json_decode($datafileContent, true);
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "datafile" => $datafileContent
 ]);
 ```
@@ -107,9 +107,9 @@ Context can be passed to SDK instance in various different ways, depending on yo
 You can set context at the time of initialization:
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "context" => [
     "deviceId" => "123",
     "country" => "nl",
@@ -278,9 +278,9 @@ For the lifecycle of the SDK instance in your application, you can set some feat
 ### Initialize with sticky
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "sticky" => [
     "myFeatureKey" => [
       "enabled" => true,
@@ -335,7 +335,7 @@ $f->setDatafile($datafileContent);
 
 ### Updating datafile
 
-You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile-set) event that you can listen and react to accordingly.
+You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile_set) event that you can listen and react to accordingly.
 
 The triggers for setting the datafile again can be:
 
@@ -363,11 +363,11 @@ If you choose `debug` level to make the logs more verbose, you can set it at the
 Setting `debug` level will print out all logs, including `info`, `warning`, and `error` levels.
 
 ```php
-use function Featurevisor\createInstance;
-use function Featurevisor\createLogger;
+use Featurevisor\Featurevisor;
+use Featurevisor\Logger;
 
-$f = createInstance([
-  "logger" => createLogger([
+$f = Featurevisor::createInstance([
+  "logger" => Logger::create([
     "level" => "debug",
   ]),
 ]);
@@ -376,7 +376,7 @@ $f = createInstance([
 Alternatively, you can also set `logLevel` directly:
 
 ```php
-$f = createInstance([
+$f = Featurevisor::createInstance([
   "logLevel" => "debug",
 ]);
 ```
@@ -392,11 +392,11 @@ $f->setLogLevel("debug");
 You can also pass your own log handler, if you do not wish to print the logs to the console:
 
 ```php
-use function Featurevisor\createInstance;
-use function Featurevisor\createLogger;
+use Featurevisor\Featurevisor;
+use Featurevisor\Logger;
 
-$f = createInstance([
-  "logger" => createLogger([
+$f = Featurevisor::createInstance([
+  "logger" => Logger::create([
     "level" => "info",
     "handler" => function ($level, $message, $details) {
       // do something with the log
@@ -566,9 +566,9 @@ $myCustomHook = [
 You can register hooks at the time of SDK initialization:
 
 ```php
-use function Featurevisor\createInstance;
+use Featurevisor\Featurevisor;
 
-$f = createInstance([
+$f = Featurevisor::createInstance([
   'hooks' => [
     $myCustomHook
   ],

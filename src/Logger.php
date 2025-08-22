@@ -36,10 +36,18 @@ class Logger implements LoggerInterface
      *     handler?: Closure,
      * } $options
      */
-    public function __construct(array $options = [])
+    public static function create(array $options = []): self
     {
-        $this->level = $options['level'] ?? self::DEFAULT_LEVEL;
-        $this->handler = $options['handler'] ?? static fn ($level, $message, array $context) => self::defaultLogHandler($level, $message, $context);
+        return new self(
+            $options['level'] ?? self::DEFAULT_LEVEL,
+            $options['handler'] ?? null
+        );
+    }
+
+    public function __construct(string $level = self::DEFAULT_LEVEL, Closure $handler = null)
+    {
+        $this->handler = $handler ?? static fn ($level, $message, array $context) => self::defaultLogHandler($level, $message, $context);
+        $this->level = $level;
     }
 
     public function setLevel(string $level): void
@@ -62,7 +70,7 @@ class Logger implements LoggerInterface
         ($this->handler)($level, self::MSG_PREFIX.' '.$message, $context);
     }
 
-    public static function defaultLogHandler($level, $message, ?array $details = null): void
+    private static function defaultLogHandler($level, $message, ?array $details = null): void
     {
         if (STDOUT === false) {
             return;

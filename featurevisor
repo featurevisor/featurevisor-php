@@ -4,9 +4,9 @@
 require __DIR__ . '/vendor/autoload.php';
 
 use Featurevisor\DatafileReader;
+use Featurevisor\Featurevisor;
+use Featurevisor\Logger;
 use Psr\Log\LogLevel;
-use function Featurevisor\createInstance;
-use function Featurevisor\createLogger;
 
 /**
  * CLI Options
@@ -255,9 +255,9 @@ function testSegment(array $assertion, array $segment, string $level): array {
         'segments' => []
     ];
 
-    $datafileReader = new DatafileReader([
+    $datafileReader = DatafileReader::createFromOptions([
         'datafile' => $datafile,
-        'logger' => createLogger([
+        'logger' => Logger::create([
             'level' => $level,
         ]),
     ]);
@@ -304,9 +304,9 @@ function test(array $cliOptions) {
     $sdkInstancesByEnvironment = [];
     foreach ($environments as $environment) {
         $datafile = $datafilesByEnvironment[$environment];
-        $sdkInstancesByEnvironment[$environment] = createInstance([
+        $sdkInstancesByEnvironment[$environment] = Featurevisor::createInstance([
             'datafile' => $datafile,
-            'logger' => createLogger([
+            'logger' => Logger::create([
               'level' => $level,
             ]),
             'hooks' => [
@@ -343,9 +343,9 @@ function test(array $cliOptions) {
                 // If "at" parameter is provided, create a new SDK instance with the specific hook
                 if (isset($assertion["at"])) {
                     $datafile = $datafilesByEnvironment[$environment];
-                    $f = createInstance([
+                    $f = Featurevisor::createInstance([
                         'datafile' => $datafile,
-                        'logger' => createLogger([
+                        'logger' => Logger::create([
                           'level' => $level,
                         ]),
                         'hooks' => [
@@ -420,9 +420,9 @@ function benchmark(array $cliOptions) {
     $level = getLoggerLevel($cliOptions);
     $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
 
-    $f = createInstance([
+    $f = Featurevisor::createInstance([
         'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
-        'logger' => createLogger([
+        'logger' => Logger::create([
           'level' => $level,
         ]),
     ]);
@@ -481,9 +481,9 @@ function assessDistribution(array $cliOptions) {
     $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
     $level = getLoggerLevel($cliOptions);
 
-    $f = createInstance([
+    $f = Featurevisor::createInstance([
         'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
-        'logger' => createLogger([
+        'logger' => Logger::create([
           'level' => $level,
         ]),
     ]);

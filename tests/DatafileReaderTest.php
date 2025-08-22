@@ -2,10 +2,9 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
-
 use Featurevisor\DatafileReader;
-use function Featurevisor\createLogger;
 
 class DatafileReaderTest extends TestCase {
 
@@ -49,8 +48,8 @@ class DatafileReaderTest extends TestCase {
                 ],
             ],
         ];
-        $logger = createLogger();
-        $reader = new DatafileReader([
+        $logger = Logger::create();
+        $reader = DatafileReader::createFromOptions([
             'datafile' => $datafileJson,
             'logger' => $logger,
         ]);
@@ -112,8 +111,8 @@ class DatafileReaderTest extends TestCase {
                 ],
             ],
         ];
-        $logger = createLogger();
-        $datafileReader = new DatafileReader([
+        $logger = Logger::create();
+        $datafileReader = DatafileReader::createFromOptions([
             'datafile' => $datafileContent,
             'logger' => $logger,
         ]);

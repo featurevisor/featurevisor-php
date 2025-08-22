@@ -2,12 +2,10 @@
 
 namespace Featurevisor\Tests;
 
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Logger;
 use Psr\Log\LogLevel;
-use function Featurevisor\createLogger;
 
 class LoggerTest extends TestCase
 {
@@ -29,13 +27,13 @@ class LoggerTest extends TestCase
 
     public function testCreateLoggerWithDefaultOptions(): void
     {
-        $logger = createLogger();
+        $logger = Logger::create();
         self::assertInstanceOf(Logger::class, $logger);
     }
 
     public function testCreateLoggerWithCustomLevel(): void
     {
-        $logger = createLogger(['level' => 'debug']);
+        $logger = Logger::create(['level' => 'debug']);
         self::assertInstanceOf(Logger::class, $logger);
     }
 
@@ -49,7 +47,7 @@ class LoggerTest extends TestCase
             self::assertSame([], $details);
         };
 
-        $logger = createLogger(['handler' => $customHandler]);
+        $logger = Logger::create(['handler' => $customHandler]);
         $logger->info('test message');
 
         self::assertTrue($customHandlerCalled);
@@ -57,7 +55,7 @@ class LoggerTest extends TestCase
 
     public function testLoggerConstructorUsesDefaultLogLevelWhenNoneProvided(): void
     {
-        $logger = new Logger([]);
+        $logger = Logger::create();
 
         // Capture output to verify debug is not logged with default level (info)
         $logger->debug('debug message');
@@ -94,7 +92,7 @@ class LoggerTest extends TestCase
             self::assertSame([], $details);
         };
 
-        $logger = new Logger(['handler' => $customHandler]);
+        $logger = Logger::create(['handler' => $customHandler]);
         $logger->info('test message');
 
         self::assertTrue($customHandlerCalled);
@@ -205,7 +203,7 @@ class LoggerTest extends TestCase
             self::assertEquals(['test' => true], $details);
         };
 
-        $logger = new Logger(['handler' => $customHandler, 'level' => 'debug']);
+        $logger = Logger::create(['handler' => $customHandler, 'level' => 'debug']);
         $details = ['test' => true];
 
         $logger->log('info', 'test message', $details);
@@ -220,7 +218,7 @@ class LoggerTest extends TestCase
             $customHandlerCalled = true;
         };
 
-        $logger = new Logger(['handler' => $customHandler, 'level' => LogLevel::WARNING]);
+        $logger = Logger::create(['handler' => $customHandler, 'level' => LogLevel::WARNING]);
 
         $logger->log('debug', 'debug message');
         self::assertFalse($customHandlerCalled);
@@ -228,9 +226,9 @@ class LoggerTest extends TestCase
 
     private function getLogger(string $level = Logger::DEFAULT_LEVEL): Logger
     {
-        return new Logger(['level' => $level, 'handler' => function ($level, $message, array $context) {
+        return Logger::create(['level' => $level, 'handler' => function ($level, $message, array $context) {
             $context = $context !== [] ? ' ' . json_encode($context, JSON_THROW_ON_ERROR) : '';
-            $this->logBuffer .= $message.$context.PHP_EOL;
+            $this->logBuffer .= $message . $context . PHP_EOL;
         }]);
     }
 }

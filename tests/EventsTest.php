@@ -2,11 +2,11 @@
 
 namespace Featurevisor\Tests;
 
+use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Events;
 use Featurevisor\DatafileReader;
-use function Featurevisor\createLogger;
 
 class EventsTest extends TestCase
 {
@@ -49,11 +49,11 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventEmptyToNew()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -63,7 +63,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',
@@ -88,11 +88,11 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventChangeHashAddition()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -105,7 +105,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',
@@ -131,11 +131,11 @@ class EventsTest extends TestCase
 
     public function testGetParamsForDatafileSetEventChangeHashRemoval()
     {
-        $logger = createLogger([
+        $logger = Logger::create([
             'level' => 'error',
         ]);
 
-        $previousDatafileReader = new DatafileReader([
+        $previousDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '1',
@@ -148,7 +148,7 @@ class EventsTest extends TestCase
             'logger' => $logger,
         ]);
 
-        $newDatafileReader = new DatafileReader([
+        $newDatafileReader = DatafileReader::createFromOptions([
             'datafile' => [
                 'schemaVersion' => '1.0.0',
                 'revision' => '2',

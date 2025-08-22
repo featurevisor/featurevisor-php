@@ -2,24 +2,63 @@
 
 namespace Featurevisor;
 
+use Closure;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 class HooksManager
 {
     private array $hooks = [];
     private LoggerInterface $logger;
 
-    public function __construct(array $options)
+    /**
+     * @param array{
+     *     hooks?: array<array{
+     *         name: string,
+     *         before: Closure,
+     *         after: Closure,
+     *         bucketKey: Closure,
+     *         bucketValue: Closure
+     *     }>,
+     *     logger?: LoggerInterface,
+     * } $options
+     * @return self
+     */
+    public static function createFromOptions(array $options): self
     {
-        $this->logger = $options['logger'];
+        return new self(
+            $options['hooks'] ?? [],
+            $options['logger'] ?? new NullLogger()
+        );
+    }
 
-        if (isset($options['hooks'])) {
-            foreach ($options['hooks'] as $hook) {
-                $this->add($hook);
-            }
+    /**
+     * @param array<array{
+     *     name: string,
+     *     before: Closure,
+     *     after: Closure,
+     *     bucketKey: Closure,
+     *     bucketValue: Closure
+     * }> $hooks
+     */
+    public function __construct(array $hooks, LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+        foreach ($hooks as $hook) {
+            $this->add($hook);
         }
     }
 
+    /**
+     * @param array{
+     *      name: string,
+     *      before: Closure,
+     *      after: Closure,
+     *      bucketKey: Closure,
+     *      bucketValue: Closure
+     *  } $hook
+     * @return callable|null
+     */
     public function add(array $hook): ?callable
     {
         foreach ($this->hooks as $existingHook) {
