@@ -47,6 +47,9 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Running tests](#running-tests)
   - [Releasing](#releasing)
 - [License](#license)
+
+<!-- FEATUREVISOR_DOCS_BEGIN -->
+
 ## Installation
 
 In your PHP application, install the SDK using [Composer](https://getcomposer.org/):
@@ -683,6 +686,8 @@ $ vendor/bin/featurevisor assess-distribution \
     --populateUuid=deviceId \
     --n=1000
 ```
+
+<!-- FEATUREVISOR_DOCS_END -->
 
 ## Development of this package
 
