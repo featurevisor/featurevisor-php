@@ -72,7 +72,7 @@ class Logger implements LoggerInterface
 
     private static function defaultLogHandler($level, $message, ?array $details = null): void
     {
-        if (STDOUT === false) {
+        if (STDOUT == false) {
             return;
         }
 

@@ -32,10 +32,6 @@ class CompareVersions
 
     private static function validateAndParse(string $version): array
     {
-        if (!is_string($version)) {
-            throw new \TypeError('Invalid argument expected string');
-        }
-
         if (!preg_match(self::$semver, $version, $match)) {
             throw new \Exception("Invalid argument not valid semver ('$version' received)");
         }
