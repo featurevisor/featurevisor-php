@@ -23,10 +23,10 @@ class Featurevisor
      *     sticky?: array<string, mixed>,
      *     hooks?: array<array{
      *         name: string,
-     *         before: Closure,
-     *         after: Closure,
-     *         bucketKey: Closure,
-     *         bucketValue: Closure
+     *         before?: Closure,
+     *         after?: Closure,
+     *         bucketKey?: Closure,
+     *         bucketValue?: Closure
      *    }>
      * } $options
      * @return self
