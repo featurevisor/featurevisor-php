@@ -147,14 +147,12 @@ class ChildTest extends TestCase {
             'context' => [ 'appVersion' => '1.0.0' ],
         ]);
 
-        self::assertNotNull($f);
         self::assertEquals(['appVersion' => '1.0.0'], $f->getContext());
 
         $childF = $f->spawn([
             'userId' => '123',
             'country' => 'nl',
         ]);
-        self::assertNotNull($childF);
         self::assertEquals([
             'appVersion' => '1.0.0',
             'userId' => '123',

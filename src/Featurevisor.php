@@ -23,10 +23,10 @@ class Featurevisor
      *     sticky?: array<string, mixed>,
      *     hooks?: array<array{
      *         name: string,
-     *         before: Closure,
-     *         after: Closure,
-     *         bucketKey: Closure,
-     *         bucketValue: Closure
+     *         before?: Closure,
+     *         after?: Closure,
+     *         bucketKey?: Closure,
+     *         bucketValue?: Closure
      *    }>
      * } $options
      * @return self
@@ -560,20 +560,18 @@ class Featurevisor
                 'flagEvaluation' => $flagEvaluation,
             ]);
             // variation
-            if (method_exists($this->datafileReader, 'hasVariations') && $this->datafileReader->hasVariations($featureKey)) {
+            if ($this->datafileReader->hasVariations($featureKey)) {
                 $variation = $this->getVariation($featureKey, $context, $opts);
                 if ($variation !== null) {
                     $evaluatedFeature['variation'] = $variation;
                 }
             }
             // variables
-            if (method_exists($this->datafileReader, 'getVariableKeys')) {
-                $variableKeys = $this->datafileReader->getVariableKeys($featureKey);
-                if (!empty($variableKeys)) {
-                    $evaluatedFeature['variables'] = [];
-                    foreach ($variableKeys as $variableKey) {
-                        $evaluatedFeature['variables'][$variableKey] = $this->getVariable($featureKey, $variableKey, $context, $opts);
-                    }
+            $variableKeys = $this->datafileReader->getVariableKeys($featureKey);
+            if (!empty($variableKeys)) {
+                $evaluatedFeature['variables'] = [];
+                foreach ($variableKeys as $variableKey) {
+                    $evaluatedFeature['variables'][$variableKey] = $this->getVariable($featureKey, $variableKey, $context, $opts);
                 }
             }
             $evaluations[$featureKey] = $evaluatedFeature;
