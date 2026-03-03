@@ -23,6 +23,58 @@ class FeaturevisorTest extends TestCase
         self::assertTrue(method_exists($sdk, 'getVariation'));
     }
 
+    public function testShouldCreateInstanceWithLogLevel()
+    {
+        $logs = [];
+        $sdk = Featurevisor::createInstance([
+            'logLevel' => LogLevel::DEBUG,
+            'logger' => Logger::create([
+                'level' => LogLevel::ERROR,
+                'handler' => function ($level, $message, $context) use (&$logs) {
+                    $logs[] = compact('level', 'message', 'context');
+                },
+            ]),
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'features' => [],
+                'segments' => [],
+            ],
+        ]);
+
+        $sdk->setContext(['userId' => '123']);
+
+        // logger option should take precedence over logLevel option
+        self::assertCount(0, $logs);
+    }
+
+    public function testShouldSetLogLevelAfterInitialization()
+    {
+        $logs = [];
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create([
+                'level' => LogLevel::ERROR,
+                'handler' => function ($level, $message, $context) use (&$logs) {
+                    $logs[] = compact('level', 'message', 'context');
+                },
+            ]),
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'features' => [],
+                'segments' => [],
+            ],
+        ]);
+
+        $sdk->setContext(['userId' => '123']);
+        self::assertCount(0, $logs);
+
+        $sdk->setLogLevel(LogLevel::DEBUG);
+        $sdk->setContext(['country' => 'nl']);
+        self::assertCount(1, $logs);
+        self::assertSame('debug', $logs[0]['level']);
+    }
+
     public function testShouldConfigurePlainBucketBy()
     {
         $capturedBucketKey = '';

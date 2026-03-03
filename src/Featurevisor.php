@@ -4,7 +4,7 @@ namespace Featurevisor;
 
 use Closure;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
+use Psr\Log\LogLevel;
 
 class Featurevisor
 {
@@ -18,6 +18,7 @@ class Featurevisor
     /**
      * @param array{
      *     datafile?: string|array<string, mixed>,
+     *     logLevel?: LogLevel::*|string,
      *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
@@ -33,7 +34,9 @@ class Featurevisor
      */
     public static function createInstance(array $options): self
     {
-        $logger = $options['logger'] ?? new NullLogger();
+        $logger = $options['logger'] ?? Logger::create([
+            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+        ]);
 
         return new self(
             isset($options['datafile'])
@@ -112,6 +115,13 @@ class Featurevisor
     public function getFeature(string $featureKey): ?array
     {
         return $this->datafileReader->getFeature($featureKey);
+    }
+
+    public function setLogLevel(string $level): void
+    {
+        if (method_exists($this->logger, 'setLevel')) {
+            $this->logger->setLevel($level);
+        }
     }
 
     public function addHook(array $hook): ?callable

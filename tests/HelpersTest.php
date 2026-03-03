@@ -20,10 +20,16 @@ class HelpersTest extends TestCase
         self::assertSame(['1', '2'], Helpers::getValueByType(['1', '2'], 'array'));
         self::assertSame(1, Helpers::getValueByType('1', 'integer'));
         self::assertSame(1.1, Helpers::getValueByType('1.1', 'double'));
+        self::assertSame(['x' => 1], Helpers::getValueByType(['x' => 1], 'json'));
     }
 
     public function testShouldReturnNullForNullValue()
     {
         self::assertNull(Helpers::getValueByType(null, 'string'));
+    }
+
+    public function testShouldReturnNullWhenCallablePassedForString()
+    {
+        self::assertNull(Helpers::getValueByType(static fn () => true, 'string'));
     }
 }
