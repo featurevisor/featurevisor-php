@@ -190,12 +190,9 @@ class DatafileReader
                 return false;
             }
             if (isset($conditions['not']) && is_array($conditions['not'])) {
-                foreach ($conditions['not'] as $subCondition) {
-                    if ($this->allConditionsAreMatched($subCondition, $context)) {
-                        return false;
-                    }
-                }
-                return true;
+                return $this->allConditionsAreMatched([
+                    'and' => $conditions['not'],
+                ], $context) === false;
             }
             // If it's a plain array, treat as AND (all must match)
             if (array_keys($conditions) === range(0, count($conditions) - 1)) {

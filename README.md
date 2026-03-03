@@ -655,8 +655,12 @@ $ vendor/bin/featurevisor test \
     --quiet|verbose \
     --onlyFailures \
     --keyPattern="myFeatureKey" \
-    --assertionPattern="#1"
+    --assertionPattern="#1" \
+    --with-tags \
+    --with-scopes
 ```
+
+If your assertions include `scope`, run tests with `--with-scopes` to evaluate against scoped datafiles generated on the fly via `npx featurevisor build --scope=<scopeName> --environment=<env> --json`.
 
 ### Benchmark
 

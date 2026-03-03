@@ -23,3 +23,6 @@ cache/
 .phpunit*
 
 example-1
+
+monorepo
+specs
