@@ -23,6 +23,58 @@ class FeaturevisorTest extends TestCase
         self::assertTrue(method_exists($sdk, 'getVariation'));
     }
 
+    public function testShouldCreateInstanceWithLogLevel()
+    {
+        $logs = [];
+        $sdk = Featurevisor::createInstance([
+            'logLevel' => LogLevel::DEBUG,
+            'logger' => Logger::create([
+                'level' => LogLevel::ERROR,
+                'handler' => function ($level, $message, $context) use (&$logs) {
+                    $logs[] = compact('level', 'message', 'context');
+                },
+            ]),
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'features' => [],
+                'segments' => [],
+            ],
+        ]);
+
+        $sdk->setContext(['userId' => '123']);
+
+        // logger option should take precedence over logLevel option
+        self::assertCount(0, $logs);
+    }
+
+    public function testShouldSetLogLevelAfterInitialization()
+    {
+        $logs = [];
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create([
+                'level' => LogLevel::ERROR,
+                'handler' => function ($level, $message, $context) use (&$logs) {
+                    $logs[] = compact('level', 'message', 'context');
+                },
+            ]),
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'features' => [],
+                'segments' => [],
+            ],
+        ]);
+
+        $sdk->setContext(['userId' => '123']);
+        self::assertCount(0, $logs);
+
+        $sdk->setLogLevel(LogLevel::DEBUG);
+        $sdk->setContext(['country' => 'nl']);
+        self::assertCount(1, $logs);
+        self::assertSame('debug', $logs[0]['level']);
+    }
+
     public function testShouldConfigurePlainBucketBy()
     {
         $capturedBucketKey = '';
@@ -1096,6 +1148,141 @@ class FeaturevisorTest extends TestCase
         self::assertEquals('orange', $sdk->getVariable('test', 'color', array_merge($defaultContext, ['country' => 'nl'])));
     }
 
+    public function testShouldApplyRuleVariableOverridesOnTopOfRuleVariables()
+    {
+        $sdk = Featurevisor::createInstance([
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'segments' => [
+                    'germany' => [
+                        'key' => 'germany',
+                        'conditions' => json_encode([
+                            [
+                                'attribute' => 'country',
+                                'operator' => 'equals',
+                                'value' => 'de',
+                            ],
+                        ]),
+                    ],
+                    'mobile' => [
+                        'key' => 'mobile',
+                        'conditions' => json_encode([
+                            [
+                                'attribute' => 'device',
+                                'operator' => 'equals',
+                                'value' => 'mobile',
+                            ],
+                        ]),
+                    ],
+                ],
+                'features' => [
+                    'test' => [
+                        'key' => 'test',
+                        'bucketBy' => 'userId',
+                        'variablesSchema' => [
+                            'config' => [
+                                'key' => 'config',
+                                'type' => 'object',
+                                'defaultValue' => [
+                                    'source' => 'default',
+                                    'nested' => ['value' => 0],
+                                ],
+                            ],
+                        ],
+                        'traffic' => [
+                            [
+                                'key' => 'germany',
+                                'segments' => 'germany',
+                                'percentage' => 100000,
+                                'variables' => [
+                                    'config' => [
+                                        'source' => 'rule',
+                                        'nested' => ['value' => 10],
+                                        'flag' => true,
+                                    ],
+                                ],
+                                'variableOverrides' => [
+                                    'config' => [
+                                        [
+                                            'segments' => 'mobile',
+                                            'value' => [
+                                                'source' => 'rule',
+                                                'nested' => ['value' => 20],
+                                                'flag' => true,
+                                            ],
+                                        ],
+                                        [
+                                            'conditions' => [
+                                                [
+                                                    'attribute' => 'country',
+                                                    'operator' => 'equals',
+                                                    'value' => 'de',
+                                                ],
+                                            ],
+                                            'value' => [
+                                                'source' => 'rule',
+                                                'nested' => ['value' => 30],
+                                                'flag' => true,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            [
+                                'key' => 'everyone',
+                                'segments' => '*',
+                                'percentage' => 100000,
+                                'variables' => [
+                                    'config' => [
+                                        'source' => 'everyone',
+                                        'nested' => ['value' => 1],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertEquals(
+            [
+                'source' => 'rule',
+                'nested' => ['value' => 30],
+                'flag' => true,
+            ],
+            $sdk->getVariableObject('test', 'config', [
+                'userId' => 'user-1',
+                'country' => 'de',
+            ])
+        );
+
+        self::assertEquals(
+            [
+                'source' => 'rule',
+                'nested' => ['value' => 20],
+                'flag' => true,
+            ],
+            $sdk->getVariableObject('test', 'config', [
+                'userId' => 'user-1',
+                'country' => 'de',
+                'device' => 'mobile',
+            ])
+        );
+
+        self::assertEquals(
+            [
+                'source' => 'everyone',
+                'nested' => ['value' => 1],
+            ],
+            $sdk->getVariableObject('test', 'config', [
+                'userId' => 'user-1',
+                'country' => 'nl',
+            ])
+        );
+    }
+
     public function testShouldCheckIfEnabledForIndividuallyNamedSegments()
     {
         $sdk = Featurevisor::createInstance([
@@ -1159,5 +1346,139 @@ class FeaturevisorTest extends TestCase
 
         self::assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'nl']));
         self::assertTrue($sdk->isEnabled('test', ['userId' => '123', 'country' => 'us', 'device' => 'iphone']));
+    }
+
+    public function testShouldGetArrayAndObjectVariables()
+    {
+        $sdk = Featurevisor::createInstance([
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => '1.0',
+                'features' => [
+                    'withArray' => [
+                        'key' => 'withArray',
+                        'bucketBy' => 'userId',
+                        'variablesSchema' => [
+                            'simpleArray' => [
+                                'key' => 'simpleArray',
+                                'type' => 'array',
+                                'defaultValue' => ['red', 'blue', 'green'],
+                            ],
+                            'simpleStringArray' => [
+                                'key' => 'simpleStringArray',
+                                'type' => 'array',
+                                'defaultValue' => ['red', 'blue', 'green'],
+                            ],
+                            'objectArray' => [
+                                'key' => 'objectArray',
+                                'type' => 'array',
+                                'defaultValue' => [
+                                    ['color' => 'red', 'opacity' => 100],
+                                    ['color' => 'blue', 'opacity' => 90],
+                                    ['color' => 'green', 'opacity' => 95],
+                                ],
+                            ],
+                        ],
+                        'traffic' => [
+                            [
+                                'key' => '1',
+                                'segments' => '*',
+                                'percentage' => 100000,
+                                'allocation' => [],
+                            ],
+                        ],
+                    ],
+                    'withObject' => [
+                        'key' => 'withObject',
+                        'bucketBy' => 'userId',
+                        'variablesSchema' => [
+                            'themeConfig' => [
+                                'key' => 'themeConfig',
+                                'type' => 'object',
+                                'defaultValue' => [
+                                    'theme' => 'light',
+                                    'darkMode' => false,
+                                ],
+                            ],
+                            'headerConfig' => [
+                                'key' => 'headerConfig',
+                                'type' => 'object',
+                                'defaultValue' => [
+                                    'style' => ['fontSize' => 18, 'bold' => true],
+                                    'title' => 'Welcome',
+                                ],
+                            ],
+                            'mixedConfig' => [
+                                'key' => 'mixedConfig',
+                                'type' => 'object',
+                                'defaultValue' => [
+                                    'name' => 'mixed',
+                                    'enabled' => true,
+                                    'meta' => ['score' => 0.95, 'items' => ['a', 'b']],
+                                ],
+                            ],
+                        ],
+                        'traffic' => [
+                            [
+                                'key' => '1',
+                                'segments' => '*',
+                                'percentage' => 100000,
+                                'allocation' => [],
+                            ],
+                        ],
+                    ],
+                ],
+                'segments' => [],
+            ],
+        ]);
+
+        $context = ['userId' => 'user-1'];
+
+        self::assertEquals(['red', 'blue', 'green'], $sdk->getVariable('withArray', 'simpleArray', $context));
+        self::assertEquals(['red', 'blue', 'green'], $sdk->getVariableArray('withArray', 'simpleArray', $context));
+        self::assertEquals(
+            [
+                ['color' => 'red', 'opacity' => 100],
+                ['color' => 'blue', 'opacity' => 90],
+                ['color' => 'green', 'opacity' => 95],
+            ],
+            $sdk->getVariableArray('withArray', 'objectArray', $context)
+        );
+
+        self::assertEquals(
+            ['theme' => 'light', 'darkMode' => false],
+            $sdk->getVariableObject('withObject', 'themeConfig', $context)
+        );
+        self::assertEquals(
+            [
+                'style' => ['fontSize' => 18, 'bold' => true],
+                'title' => 'Welcome',
+            ],
+            $sdk->getVariableObject('withObject', 'headerConfig', $context)
+        );
+        self::assertEquals(
+            [
+                'name' => 'mixed',
+                'enabled' => true,
+                'meta' => ['score' => 0.95, 'items' => ['a', 'b']],
+            ],
+            $sdk->getVariableObject('withObject', 'mixedConfig', $context)
+        );
+
+        self::assertNull($sdk->getVariableArray('withArray', 'nonExisting', $context));
+        self::assertNull($sdk->getVariableObject('withObject', 'nonExisting', $context));
+        self::assertNull($sdk->getVariableArray('nonExistingFeature', 'simpleArray', $context));
+        self::assertNull($sdk->getVariableObject('nonExistingFeature', 'themeConfig', $context));
+
+        $all = $sdk->getAllEvaluations($context);
+        self::assertTrue($all['withArray']['enabled']);
+        self::assertEquals(['red', 'blue', 'green'], $all['withArray']['variables']['simpleArray']);
+        self::assertEquals(
+            [
+                'theme' => 'light',
+                'darkMode' => false,
+            ],
+            $all['withObject']['variables']['themeConfig']
+        );
     }
 }

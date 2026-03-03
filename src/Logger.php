@@ -44,10 +44,10 @@ class Logger implements LoggerInterface
         );
     }
 
-    public function __construct(string $level = self::DEFAULT_LEVEL, Closure $handler = null)
+    public function __construct(string $level = self::DEFAULT_LEVEL, ?Closure $handler = null)
     {
         $this->handler = $handler ?? static fn ($level, $message, array $context) => self::defaultLogHandler($level, $message, $context);
-        $this->level = $level;
+        $this->setLevel($level);
     }
 
     public function setLevel(string $level): void
@@ -61,7 +61,13 @@ class Logger implements LoggerInterface
 
     public function log($level, $message, array $context = []): void
     {
-        $shouldHandle = array_search($this->level, self::ALL_LEVELS) >= array_search($level, self::ALL_LEVELS);
+        $level = (string) $level;
+
+        if (!in_array($level, self::ALL_LEVELS, true)) {
+            throw new InvalidArgumentException('Invalid log level');
+        }
+
+        $shouldHandle = array_search($this->level, self::ALL_LEVELS, true) >= array_search($level, self::ALL_LEVELS, true);
 
         if (!$shouldHandle) {
             return;
@@ -85,4 +91,5 @@ class Logger implements LoggerInterface
             ) . PHP_EOL
         );
     }
+
 }

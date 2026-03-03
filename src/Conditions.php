@@ -87,12 +87,8 @@ class Conditions
             if (count($notConditions) === 0) {
                 return true;
             }
-            foreach ($notConditions as $subCondition) {
-                if (self::conditionIsMatched($subCondition, $context, $getRegex)) {
-                    return false;
-                }
-            }
-            return true;
+            // JS SDK semantics: "not" negates the entire AND group.
+            return !self::conditionIsMatched(['and' => $notConditions], $context, $getRegex);
         }
 
         $attribute = $condition['attribute'] ?? '';
@@ -121,14 +117,14 @@ class Conditions
             (is_string($contextValueFromPath) || is_numeric($contextValueFromPath) || $contextValueFromPath === null)
         ) {
             // in / notIn (where condition value is an array)
+            if (!self::pathExists($context, $attribute)) {
+                return false;
+            }
             $valueInContext = $contextValueFromPath;
 
             if ($operator === 'in') {
                 return in_array($valueInContext, $value);
-            } elseif (
-                $operator === 'notIn' &&
-                self::pathExists($context, $attribute)
-            ) {
+            } elseif ($operator === 'notIn') {
                 return !in_array($valueInContext, $value);
             }
 

@@ -4,7 +4,7 @@ namespace Featurevisor;
 
 use Closure;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
+use Psr\Log\LogLevel;
 
 class Featurevisor
 {
@@ -18,6 +18,7 @@ class Featurevisor
     /**
      * @param array{
      *     datafile?: string|array<string, mixed>,
+     *     logLevel?: LogLevel::*|string,
      *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
@@ -33,7 +34,9 @@ class Featurevisor
      */
     public static function createInstance(array $options): self
     {
-        $logger = $options['logger'] ?? new NullLogger();
+        $logger = $options['logger'] ?? Logger::create([
+            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+        ]);
 
         return new self(
             isset($options['datafile'])
@@ -112,6 +115,13 @@ class Featurevisor
     public function getFeature(string $featureKey): ?array
     {
         return $this->datafileReader->getFeature($featureKey);
+    }
+
+    public function setLogLevel(string $level): void
+    {
+        if (method_exists($this->logger, 'setLevel')) {
+            $this->logger->setLevel($level);
+        }
     }
 
     public function addHook(array $hook): ?callable
@@ -398,12 +408,7 @@ class Featurevisor
     public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return (bool) $value;
+        return Helpers::getValueByType($value, 'boolean');
     }
 
     /**
@@ -418,12 +423,7 @@ class Featurevisor
     public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return (string) $value;
+        return Helpers::getValueByType($value, 'string');
     }
 
     /**
@@ -438,12 +438,7 @@ class Featurevisor
     public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return (int) $value;
+        return Helpers::getValueByType($value, 'integer');
     }
 
     /**
@@ -458,12 +453,7 @@ class Featurevisor
     public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return (float) $value;
+        return Helpers::getValueByType($value, 'double');
     }
 
     /**
@@ -478,12 +468,7 @@ class Featurevisor
     public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return is_array($value) ? $value : [$value];
+        return Helpers::getValueByType($value, 'array');
     }
 
     /**
@@ -498,12 +483,7 @@ class Featurevisor
     public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return is_array($value) ? $value : null;
+        return Helpers::getValueByType($value, 'object');
     }
 
     /**

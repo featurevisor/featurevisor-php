@@ -15,6 +15,8 @@ class Evaluation
     public const VARIABLE_DEFAULT = 'variable_default';
     public const VARIABLE_DISABLED = 'variable_disabled';
     public const VARIABLE_OVERRIDE = 'variable_override';
+    public const VARIABLE_OVERRIDE_VARIATION = 'variable_override_variation';
+    public const VARIABLE_OVERRIDE_RULE = 'variable_override_rule';
     public const NO_MATCH = 'no_match';
     public const FORCED = 'forced';
     public const STICKY = 'sticky';

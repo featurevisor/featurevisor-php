@@ -23,7 +23,7 @@ class Helpers
                 case 'array':
                     return is_array($value) ? $value : null;
                 case 'object':
-                    return is_object($value) ? $value : null;
+                    return is_array($value) || is_object($value) ? $value : null;
                 // @NOTE: `json` is not handled here intentionally
                 default:
                     return $value;

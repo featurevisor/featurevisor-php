@@ -233,23 +233,76 @@ class EvaluateByBucketing
         // variable
         if ($type === 'variable' && $variableKey) {
             // override from rule
-            if ($matchedTraffic && isset($matchedTraffic['variables'][$variableKey])) {
-                $result['evaluation'] = [
-                    'type' => $type,
-                    'featureKey' => $featureKey,
-                    'reason' => Evaluation::RULE,
-                    'bucketKey' => $bucketKey,
-                    'bucketValue' => $bucketValue,
-                    'ruleKey' => $matchedTraffic['key'],
-                    'traffic' => $matchedTraffic,
-                    'variableKey' => $variableKey,
-                    'variableSchema' => $variableSchema,
-                    'variableValue' => $matchedTraffic['variables'][$variableKey]
-                ];
+            if ($matchedTraffic) {
+                // "variableOverrides"
+                if (isset($matchedTraffic['variableOverrides'][$variableKey])) {
+                    $overrides = $matchedTraffic['variableOverrides'][$variableKey];
+                    $override = null;
+                    $overrideIndex = -1;
 
-                $logger->debug('override from rule', $result['evaluation']);
+                    foreach ($overrides as $index => $o) {
+                        if (isset($o['conditions'])) {
+                            $conditions = is_string($o['conditions']) && $o['conditions'] !== '*'
+                                ? json_decode($o['conditions'], true)
+                                : $o['conditions'];
 
-                return $result;
+                            if ($datafileReader->allConditionsAreMatched($conditions, $context)) {
+                                $override = $o;
+                                $overrideIndex = $index;
+                                break;
+                            }
+                        }
+
+                        if (isset($o['segments'])) {
+                            $segments = $datafileReader->parseSegmentsIfStringified($o['segments']);
+                            if ($datafileReader->allSegmentsAreMatched($segments, $context)) {
+                                $override = $o;
+                                $overrideIndex = $index;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($override) {
+                        $result['evaluation'] = [
+                            'type' => $type,
+                            'featureKey' => $featureKey,
+                            'reason' => Evaluation::VARIABLE_OVERRIDE_RULE,
+                            'bucketKey' => $bucketKey,
+                            'bucketValue' => $bucketValue,
+                            'ruleKey' => $matchedTraffic['key'] ?? null,
+                            'traffic' => $matchedTraffic,
+                            'variableKey' => $variableKey,
+                            'variableSchema' => $variableSchema,
+                            'variableValue' => $override['value'],
+                            'variableOverrideIndex' => $overrideIndex,
+                        ];
+
+                        $logger->debug('variable override from rule', $result['evaluation']);
+
+                        return $result;
+                    }
+                }
+
+                // from "variables"
+                if (isset($matchedTraffic['variables']) && array_key_exists($variableKey, $matchedTraffic['variables'])) {
+                    $result['evaluation'] = [
+                        'type' => $type,
+                        'featureKey' => $featureKey,
+                        'reason' => Evaluation::RULE,
+                        'bucketKey' => $bucketKey,
+                        'bucketValue' => $bucketValue,
+                        'ruleKey' => $matchedTraffic['key'],
+                        'traffic' => $matchedTraffic,
+                        'variableKey' => $variableKey,
+                        'variableSchema' => $variableSchema,
+                        'variableValue' => $matchedTraffic['variables'][$variableKey]
+                    ];
+
+                    $logger->debug('override from rule', $result['evaluation']);
+
+                    return $result;
+                }
             }
 
             // check variations
@@ -301,7 +354,7 @@ class EvaluateByBucketing
                         $result['evaluation'] = [
                             'type' => $type,
                             'featureKey' => $featureKey,
-                            'reason' => Evaluation::VARIABLE_OVERRIDE,
+                            'reason' => Evaluation::VARIABLE_OVERRIDE_VARIATION,
                             'bucketKey' => $bucketKey,
                             'bucketValue' => $bucketValue,
                             'ruleKey' => $matchedTraffic['key'] ?? null,

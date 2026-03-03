@@ -24,8 +24,8 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Set sticky afterwards](#set-sticky-afterwards)
 - [Setting datafile](#setting-datafile)
   - [Updating datafile](#updating-datafile)
-  - [Interval-based update](#interval-based-update)
 - [Logging](#logging)
+  - [Levels](#levels)
   - [Customizing levels](#customizing-levels)
   - [Handler](#handler)
 - [Events](#events)
@@ -347,17 +347,20 @@ The triggers for setting the datafile again can be:
   - a specific event in your application (like a user action), or
   - an event served via websocket or server-sent events (SSE)
 
-### Interval-based update
-
-Here's an example of using interval-based update:
-
-@TODO
-
 ## Logging
 
 By default, Featurevisor SDKs will print out logs to the console for `info` level and above.
 Featurevisor PHP-SDK by default uses [PSR-3 standard](https://www.php-fig.org/psr/psr-3/) simple implementation.
 You can also choose from many mature implementations like e.g. [Monolog](https://github.com/Seldaek/monolog)
+
+### Levels
+
+These are all the available log levels:
+
+- `error`
+- `warning`
+- `info`
+- `debug`
 
 ### Customizing levels
 
@@ -415,8 +418,6 @@ Further log levels like `info` and `debug` will help you understand how the feat
 Featurevisor SDK implements a simple event emitter that allows you to listen to events that happen in the runtime.
 
 You can listen to these events that can occur at various stages in your application:
-
-@TODO: verify these events
 
 ### `datafile_set`
 
@@ -515,8 +516,8 @@ $myCustomHook = [
   // rest of the properties below are all optional per hook
 
   // before evaluation
-  'before' => function (options) {
-    $type = $options['type']; // `feature` | `variation` | `variable`
+  'before' => function ($options) {
+    $type = $options['type']; // `flag` | `variation` | `variable`
     $featureKey = $options['featureKey'];
     $variableKey = $options['variableKey']; // if type is `variable`
     $context = $options['context'];
@@ -655,8 +656,12 @@ $ vendor/bin/featurevisor test \
     --quiet|verbose \
     --onlyFailures \
     --keyPattern="myFeatureKey" \
-    --assertionPattern="#1"
+    --assertionPattern="#1" \
+    --with-tags \
+    --with-scopes
 ```
+
+If your assertions include `scope`, run tests with `--with-scopes` to evaluate against scoped datafiles generated on the fly via `npx featurevisor build --scope=<scopeName> --environment=<env> --json`.
 
 ### Benchmark
 
