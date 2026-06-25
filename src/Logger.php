@@ -59,6 +59,11 @@ class Logger implements LoggerInterface
         $this->level = $level;
     }
 
+    public function getLevel(): string
+    {
+        return $this->level;
+    }
+
     public function log($level, $message, array $context = []): void
     {
         $level = (string) $level;

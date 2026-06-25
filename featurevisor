@@ -44,8 +44,10 @@ $cliOptions = [
     'variation' => parseCliOption($argv, 'variation'),
     'verbose' => parseCliOption($argv, 'verbose'),
     'inflate' => parseCliOption($argv, 'inflate'),
+    // Accepted for compatibility with older SDK runners, intentionally ignored in v3.
     'withScopes' => parseCliOption($argv, 'withScopes'),
     'withTags' => parseCliOption($argv, 'withTags'),
+    'schemaVersion' => parseCliOption($argv, 'schemaVersion') ?? parseCliOption($argv, 'schema-version'),
     'rootDirectoryPath' => $cwd,
     'populateUuid' => array_reduce($argv, function($acc, $arg) {
         if (strpos($arg, '--populateUuid=') === 0) {
@@ -87,21 +89,40 @@ function getSegments(string $featurevisorProjectPath): array {
     return $segmentsByKey;
 }
 
+function getTargets(string $featurevisorProjectPath): array {
+    echo "Getting targets..." . PHP_EOL;
+    $targetsOutput = executeCommand("(cd " . escapeshellarg($featurevisorProjectPath) . " && npx featurevisor list --targets --json)");
+    $targets = json_decode($targetsOutput, true);
+
+    if (!is_array($targets)) {
+        return [];
+    }
+
+    $targetNames = [];
+    foreach ($targets as $target) {
+        if (is_string($target)) {
+            $targetNames[] = $target;
+        } elseif (is_array($target)) {
+            $name = $target['name'] ?? $target['key'] ?? null;
+            if (is_string($name)) {
+                $targetNames[] = $name;
+            }
+        }
+    }
+
+    return array_values(array_unique($targetNames));
+}
+
 function buildSingleDatafile(
     string $featurevisorProjectPath,
-    string $environment,
-    ?string $tag = null,
-    ?string $scope = null
+    $environment,
+    ?string $target = null
 ): array {
     $command = "(cd " . escapeshellarg($featurevisorProjectPath) . " && npx featurevisor build --json";
     $command .= " --environment=" . escapeshellarg($environment);
 
-    if ($tag) {
-        $command .= " --tag=" . escapeshellarg($tag);
-    }
-
-    if ($scope) {
-        $command .= " --scope=" . escapeshellarg($scope);
+    if ($target) {
+        $command .= " --target=" . escapeshellarg($target);
     }
 
     $command .= ")";
@@ -112,45 +133,30 @@ function buildSingleDatafile(
     return is_array($decoded) ? $decoded : [];
 }
 
-function buildDatafiles(string $featurevisorProjectPath, array $config, array $cliOptions): array {
+function getTargetDatafileKey($environment, string $target): string {
+    $environmentKey = ($environment === false || $environment === null || $environment === '')
+        ? 'false'
+        : (string) $environment;
+
+    return $environmentKey . '-target-' . $target;
+}
+
+function buildDatafiles(string $featurevisorProjectPath, array $config, array $targets = []): array {
     $datafilesByKey = [];
 
     $environments = $config['environments'] ?? [];
-    $scopes = $config['scopes'] ?? [];
-    $tags = $config['tags'] ?? [];
 
     foreach ($environments as $environment) {
         echo "Building datafile for environment: $environment..." . PHP_EOL;
         $datafilesByKey[$environment] = buildSingleDatafile($featurevisorProjectPath, $environment);
 
-        if ($cliOptions['withScopes'] === true) {
-            foreach ($scopes as $scope) {
-                if (!isset($scope['name']) || !is_string($scope['name'])) {
-                    continue;
-                }
-                $scopeName = $scope['name'];
-                echo "Building scoped datafile for environment: $environment, scope: $scopeName..." . PHP_EOL;
-                $datafilesByKey[$environment . '-scope-' . $scopeName] = buildSingleDatafile(
-                    $featurevisorProjectPath,
-                    $environment,
-                    null,
-                    $scopeName
-                );
-            }
-        }
-
-        if ($cliOptions['withTags'] === true) {
-            foreach ($tags as $tag) {
-                if (!is_string($tag)) {
-                    continue;
-                }
-                echo "Building tagged datafile for environment: $environment, tag: $tag..." . PHP_EOL;
-                $datafilesByKey[$environment . '-tag-' . $tag] = buildSingleDatafile(
-                    $featurevisorProjectPath,
-                    $environment,
-                    $tag
-                );
-            }
+        foreach ($targets as $target) {
+            echo "Building target datafile for environment: $environment, target: $target..." . PHP_EOL;
+            $datafilesByKey[getTargetDatafileKey($environment, $target)] = buildSingleDatafile(
+                $featurevisorProjectPath,
+                $environment,
+                $target
+            );
         }
     }
 
@@ -169,6 +175,18 @@ function getLoggerLevel(array $cliOptions): string {
 
 function generateUuid(): string {
     return bin2hex(random_bytes(16));
+}
+
+function stringStartsWith(string $value, string $prefix): bool {
+    return substr($value, 0, strlen($prefix)) === $prefix;
+}
+
+function stringEndsWith(string $value, string $suffix): bool {
+    if ($suffix === '') {
+        return true;
+    }
+
+    return substr($value, -strlen($suffix)) === $suffix;
 }
 
 /**
@@ -224,8 +242,8 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
         foreach (array_keys($assertion["expectedVariables"]) as $variableKey) {
             $expectedValue = $assertion["expectedVariables"][$variableKey];
             if (is_string($expectedValue) &&
-                (str_starts_with($expectedValue, '{') || str_starts_with($expectedValue, '[')) &&
-                (str_ends_with($expectedValue, '}') || str_ends_with($expectedValue, ']'))) {
+                (stringStartsWith($expectedValue, '{') || stringStartsWith($expectedValue, '[')) &&
+                (stringEndsWith($expectedValue, '}') || stringEndsWith($expectedValue, ']'))) {
                 $expectedValue = json_decode($expectedValue, true);
             }
             $actualValue = $f->getVariable($featureKey, $variableKey, $context, [
@@ -350,7 +368,8 @@ function test(array $cliOptions) {
     $config = getConfig($featurevisorProjectPath);
     $environments = $config['environments'];
     $segmentsByKey = getSegments($featurevisorProjectPath);
-    $datafilesByKey = buildDatafiles($featurevisorProjectPath, $config, $cliOptions);
+    $targets = getTargets($featurevisorProjectPath);
+    $datafilesByKey = buildDatafiles($featurevisorProjectPath, $config, $targets);
 
     echo PHP_EOL;
 
@@ -388,29 +407,10 @@ function test(array $cliOptions) {
                 } else {
                     $datafile = $datafilesByKey[$environment];
 
-                    if (isset($assertion["scope"])) {
-                        $scopeDatafileKey = $environment . '-scope-' . $assertion["scope"];
-                        if ($cliOptions['withScopes'] === true && isset($datafilesByKey[$scopeDatafileKey])) {
-                            $datafile = $datafilesByKey[$scopeDatafileKey];
-                        } elseif ($cliOptions['withScopes'] !== true) {
-                            $scope = null;
-                            foreach ($config['scopes'] ?? [] as $scopeCandidate) {
-                                if (($scopeCandidate['name'] ?? null) === $assertion["scope"]) {
-                                    $scope = $scopeCandidate;
-                                    break;
-                                }
-                            }
-
-                            if ($scope && isset($scope['context']) && is_array($scope['context'])) {
-                                $assertion['context'] = array_merge($scope['context'], $assertion['context'] ?? []);
-                            }
-                        }
-                    }
-
-                    if (isset($assertion["tag"])) {
-                        $tagDatafileKey = $environment . '-tag-' . $assertion["tag"];
-                        if ($cliOptions['withTags'] === true && isset($datafilesByKey[$tagDatafileKey])) {
-                            $datafile = $datafilesByKey[$tagDatafileKey];
+                    if (isset($assertion["target"])) {
+                        $targetDatafileKey = getTargetDatafileKey($environment, $assertion["target"]);
+                        if (isset($datafilesByKey[$targetDatafileKey])) {
+                            $datafile = $datafilesByKey[$targetDatafileKey];
                         }
                     }
 
@@ -420,9 +420,9 @@ function test(array $cliOptions) {
                           'level' => $level,
                         ]),
                         'sticky' => $assertion['sticky'] ?? [],
-                        'hooks' => [
+                        'modules' => [
                             [
-                                'name' => 'tester-hook',
+                                'name' => 'test-module',
                                 'bucketValue' => function ($options) use ($assertion) {
                                     if (isset($assertion["at"])) {
                                         return $assertion["at"] * 1000;
@@ -493,10 +493,10 @@ function benchmark(array $cliOptions) {
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
 
     $level = getLoggerLevel($cliOptions);
-    $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
+    $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment']);
 
     $f = Featurevisor::createInstance([
-        'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
+        'datafile' => $datafile,
         'logger' => Logger::create([
           'level' => $level,
         ]),
@@ -553,11 +553,11 @@ function assessDistribution(array $cliOptions) {
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
     $populateUuid = $cliOptions['populateUuid'];
 
-    $datafilesByEnvironment = buildDatafiles($featurevisorProjectPath, [$cliOptions['environment']]);
+    $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment']);
     $level = getLoggerLevel($cliOptions);
 
     $f = Featurevisor::createInstance([
-        'datafile' => $datafilesByEnvironment[$cliOptions['environment']],
+        'datafile' => $datafile,
         'logger' => Logger::create([
           'level' => $level,
         ]),

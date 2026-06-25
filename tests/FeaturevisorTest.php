@@ -103,7 +103,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -152,7 +152,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -201,7 +201,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -228,7 +228,7 @@ class FeaturevisorTest extends TestCase
         self::assertEquals('456.test', $capturedBucketKey);
     }
 
-    public function testShouldInterceptContextBeforeHook()
+    public function testShouldInterceptContextBeforeModule()
     {
         $intercepted = false;
         $interceptedFeatureKey = '';
@@ -258,7 +258,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'before' => function($options) use (&$intercepted, &$interceptedFeatureKey, &$interceptedVariableKey) {
@@ -281,7 +281,7 @@ class FeaturevisorTest extends TestCase
         self::assertEquals('', $interceptedVariableKey);
     }
 
-    public function testShouldInterceptValueAfterHook()
+    public function testShouldInterceptValueAfterModule()
     {
         $intercepted = false;
         $interceptedFeatureKey = '';
@@ -311,7 +311,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'after' => function($options) use (&$intercepted, &$interceptedFeatureKey, &$interceptedVariableKey) {
@@ -686,7 +686,7 @@ class FeaturevisorTest extends TestCase
         $bucketValue = 10000;
 
         $sdk = Featurevisor::createInstance([
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketValue' => function() use (&$bucketValue) {
@@ -1480,5 +1480,167 @@ class FeaturevisorTest extends TestCase
             ],
             $all['withObject']['variables']['themeConfig']
         );
+    }
+
+    public function testShouldSetDatafileByMergingByDefaultAndReplacingWhenRequested()
+    {
+        $events = [];
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::ERROR]),
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => 'base',
+                'segments' => [],
+                'features' => [
+                    'first' => [
+                        'key' => 'first',
+                        'bucketBy' => 'userId',
+                        'traffic' => [
+                            [
+                                'key' => '1',
+                                'segments' => '*',
+                                'percentage' => 100000,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $sdk->on('datafile_set', function(array $details) use (&$events) {
+            $events[] = $details;
+        });
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => 'merged',
+            'segments' => [],
+            'features' => [
+                'second' => [
+                    'key' => 'second',
+                    'bucketBy' => 'userId',
+                    'traffic' => [
+                        [
+                            'key' => '1',
+                            'segments' => '*',
+                            'percentage' => 100000,
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertTrue($sdk->isEnabled('first', ['userId' => '123']));
+        self::assertTrue($sdk->isEnabled('second', ['userId' => '123']));
+        self::assertFalse($events[0]['replaced']);
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => 'replaced',
+            'segments' => [],
+            'features' => [
+                'third' => [
+                    'key' => 'third',
+                    'bucketBy' => 'userId',
+                    'traffic' => [
+                        [
+                            'key' => '1',
+                            'segments' => '*',
+                            'percentage' => 100000,
+                        ],
+                    ],
+                ],
+            ],
+        ], true);
+
+        self::assertFalse($sdk->isEnabled('first', ['userId' => '123']));
+        self::assertTrue($sdk->isEnabled('third', ['userId' => '123']));
+        self::assertTrue($events[1]['replaced']);
+    }
+
+    public function testShouldManageModulesAndDuplicateDiagnostics()
+    {
+        $diagnostics = [];
+        $setupCalls = 0;
+        $closeCalls = 0;
+
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::ERROR]),
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+            'modules' => [
+                [
+                    'name' => 'module-a',
+                    'setup' => function(array $api) use (&$setupCalls) {
+                        $setupCalls++;
+                        self::assertSame('unknown', $api['getRevision']());
+                    },
+                    'close' => function() use (&$closeCalls) {
+                        $closeCalls++;
+                    },
+                ],
+            ],
+        ]);
+
+        $removeModule = $sdk->addModule([
+            'name' => 'module-b',
+            'close' => function() use (&$closeCalls) {
+                $closeCalls++;
+            },
+        ]);
+        $duplicate = $sdk->addModule(['name' => 'module-b']);
+
+        self::assertSame(1, $setupCalls);
+        self::assertNull($duplicate);
+        self::assertSame('duplicate_module', $diagnostics[0]['code']);
+
+        $removeModule();
+        $sdk->close();
+
+        self::assertSame(2, $closeCalls);
+    }
+
+    public function testShouldSupportModuleDiagnosticsSubscriptions()
+    {
+        $received = [];
+        $reporter = null;
+
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::ERROR]),
+            'modules' => [
+                [
+                    'name' => 'listener',
+                    'setup' => function(array $api) use (&$received) {
+                        $api['onDiagnostic'](function(array $diagnostic) use (&$received) {
+                            $received[] = $diagnostic;
+                        }, ['level' => LogLevel::WARNING]);
+                    },
+                ],
+                [
+                    'name' => 'reporter',
+                    'setup' => function(array $api) use (&$reporter) {
+                        $reporter = $api['reportDiagnostic'];
+                    },
+                ],
+            ],
+        ]);
+
+        $reporter([
+            'level' => 'warning',
+            'code' => 'from_reporter',
+            'message' => 'diagnostic from reporter',
+        ]);
+
+        self::assertCount(1, $received);
+        self::assertSame('from_reporter', $received[0]['code']);
+
+        $sdk->removeModule('listener');
+        $reporter([
+            'level' => 'warning',
+            'code' => 'after_remove',
+            'message' => 'after remove',
+        ]);
+
+        self::assertCount(1, $received);
     }
 }

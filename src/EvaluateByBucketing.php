@@ -12,9 +12,7 @@ class EvaluateByBucketing
         $variableKey = $options['variableKey'] ?? null;
         $logger = $options['logger'];
         $datafileReader = $options['datafileReader'];
-        $hooksManager = $options['hooksManager'];
-
-        $hooks = $hooksManager->getAll();
+        $modulesManager = $options['modulesManager'];
 
         // bucketKey
         $bucketKey = Bucketer::getBucketKey([
@@ -24,30 +22,28 @@ class EvaluateByBucketing
             'logger' => $logger
         ]);
 
-        foreach ($hooks as $hook) {
-            if (isset($hook['bucketKey'])) {
-                $bucketKey = $hook['bucketKey']([
-                    'featureKey' => $featureKey,
-                    'context' => $context,
-                    'bucketBy' => $feature['bucketBy'],
-                    'bucketKey' => $bucketKey
-                ]);
-            }
-        }
+        $bucketKey = $modulesManager->runBucketKeyModules([
+            'type' => $type,
+            'featureKey' => $featureKey,
+            'variableKey' => $variableKey,
+            'context' => $context,
+            'bucketBy' => $feature['bucketBy'],
+            'bucketKey' => $bucketKey,
+            'feature' => $feature,
+        ]);
 
         // bucketValue
         $bucketValue = Bucketer::getBucketedNumber($bucketKey);
 
-        foreach ($hooks as $hook) {
-            if (isset($hook['bucketValue'])) {
-                $bucketValue = $hook['bucketValue']([
-                    'featureKey' => $featureKey,
-                    'bucketKey' => $bucketKey,
-                    'context' => $context,
-                    'bucketValue' => $bucketValue
-                ]);
-            }
-        }
+        $bucketValue = $modulesManager->runBucketValueModules([
+            'type' => $type,
+            'featureKey' => $featureKey,
+            'variableKey' => $variableKey,
+            'bucketKey' => $bucketKey,
+            'context' => $context,
+            'bucketValue' => $bucketValue,
+            'feature' => $feature,
+        ]);
 
         $matchedTraffic = null;
         $matchedAllocation = null;

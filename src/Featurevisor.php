@@ -12,8 +12,13 @@ class Featurevisor
     private LoggerInterface $logger;
     private ?array $sticky;
     private DatafileReader $datafileReader;
-    private HooksManager $hooksManager;
+    private ModulesManager $modulesManager;
     private Emitter $emitter;
+    /** @var callable|null */
+    private $onDiagnostic;
+    /** @var array<int, array<string, mixed>> */
+    private array $moduleDiagnosticSubscriptions;
+    private bool $closed;
 
     /**
      * @param array{
@@ -22,7 +27,7 @@ class Featurevisor
      *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
-     *     hooks?: array<array{
+     *     modules?: array<array{
      *         name: string,
      *         before?: Closure,
      *         after?: Closure,
@@ -32,59 +37,80 @@ class Featurevisor
      * } $options
      * @return self
      */
-    public static function createInstance(array $options): self
+    public static function createInstance(array $options = []): self
     {
-        $logger = $options['logger'] ?? Logger::create([
-            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
-        ]);
-
-        return new self(
-            isset($options['datafile'])
-                ? DatafileReader::createFromMixed($options['datafile'], $logger)
-                : DatafileReader::createEmpty($logger),
-            $logger,
-            HooksManager::createFromOptions($options),
-            new Emitter(),
-            $options['context'] ?? [],
-            $options['sticky'] ?? null
-        );
+        return new self($options);
     }
 
-    public function __construct(
-        DatafileReader $datafile,
-        LoggerInterface $logger,
-        HooksManager $hooksManager,
-        Emitter $emitter,
-        array $context = [],
-        ?array $sticky = null
-    )
+    /**
+     * @param array<string, mixed> $options
+     */
+    public function __construct(array $options = [])
     {
-        $this->datafileReader = $datafile;
-        $this->logger = $logger;
-        $this->hooksManager = $hooksManager;
-        $this->sticky = $sticky;
-        $this->emitter = $emitter;
-        $this->context = $context;
+        $this->logger = $options['logger'] ?? Logger::create([
+            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+        ]);
+        $this->emitter = new Emitter();
+        $this->context = $options['context'] ?? [];
+        $this->sticky = $options['sticky'] ?? null;
+        $this->onDiagnostic = $options['onDiagnostic'] ?? null;
+        $this->moduleDiagnosticSubscriptions = [];
+        $this->closed = false;
+        $this->datafileReader = DatafileReader::createEmpty($this->logger);
+        $this->modulesManager = ModulesManager::createFromOptions([
+            'modules' => $options['modules'] ?? [],
+            'reportDiagnostic' => [$this, 'reportDiagnostic'],
+            'moduleApiFactory' => [$this, 'createModuleApi'],
+            'clearModuleDiagnosticSubscriptions' => [$this, 'clearModuleDiagnosticSubscriptions'],
+        ]);
 
-        $this->logger->info('Featurevisor SDK initialized');
+        if (isset($options['datafile'])) {
+            $this->setDatafile($options['datafile'], true);
+        }
+
+        $this->reportDiagnostic([
+            'level' => 'info',
+            'code' => 'sdk_initialized',
+            'message' => 'Featurevisor SDK initialized',
+        ]);
     }
 
     /**
      * @param string|array<string, mixed> $datafile
      */
-    public function setDatafile($datafile): void
+    public function setDatafile($datafile, bool $replace = false): void
     {
-        try {
-            $newDatafileReader = DatafileReader::createFromMixed($datafile, $this->logger);
+        if ($this->closed) {
+            return;
+        }
 
-            $details = Events::getParamsForDatafileSetEvent($this->datafileReader, $newDatafileReader);
+        try {
+            $incomingDatafile = is_string($datafile)
+                ? json_decode($datafile, true, 512, JSON_THROW_ON_ERROR)
+                : $datafile;
+            $nextDatafile = $replace
+                ? $incomingDatafile
+                : $this->mergeDatafiles($this->datafileReader->getDatafile(), $incomingDatafile);
+            $newDatafileReader = DatafileReader::createFromMixed($nextDatafile, $this->logger);
+
+            $details = Events::getParamsForDatafileSetEvent($this->datafileReader, $newDatafileReader, $replace);
 
             $this->datafileReader = $newDatafileReader;
 
-            $this->logger->info('datafile set', $details);
+            $this->reportDiagnostic([
+                'level' => 'info',
+                'code' => 'datafile_set',
+                'message' => 'datafile set',
+                'details' => $details,
+            ]);
             $this->emitter->trigger('datafile_set', $details);
         } catch (\Exception $e) {
-            $this->logger->error('could not parse datafile', ['error' => $e->getMessage(), 'exception' => $e]);
+            $this->reportDiagnostic([
+                'level' => 'error',
+                'code' => 'invalid_datafile',
+                'message' => 'could not parse datafile',
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -93,6 +119,10 @@ class Featurevisor
      */
     public function setSticky(array $sticky, bool $replace = false): void
     {
+        if ($this->closed) {
+            return;
+        }
+
         $previousStickyFeatures = $this->sticky ?? [];
 
         if ($replace) {
@@ -124,9 +154,25 @@ class Featurevisor
         }
     }
 
-    public function addHook(array $hook): ?callable
+    public function addModule(array $module): ?callable
     {
-        return $this->hooksManager->add($hook);
+        if ($this->closed) {
+            return null;
+        }
+
+        return $this->modulesManager->add($module);
+    }
+
+    /**
+     * @param string|array<string, mixed> $nameOrModule
+     */
+    public function removeModule($nameOrModule): void
+    {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->modulesManager->remove($nameOrModule);
     }
 
     public function on(string $eventName, callable $callback): callable
@@ -136,6 +182,13 @@ class Featurevisor
 
     public function close(): void
     {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->closed = true;
+        $this->modulesManager->closeAll();
+        $this->moduleDiagnosticSubscriptions = [];
         $this->emitter->clearAll();
     }
 
@@ -144,6 +197,10 @@ class Featurevisor
      */
     public function setContext(array $context, bool $replace = false): void
     {
+        if ($this->closed) {
+            return;
+        }
+
         if ($replace) {
             $this->context = $context;
         } else {
@@ -159,6 +216,142 @@ class Featurevisor
             'context' => $this->context,
             'replaced' => $replace
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<string, callable>
+     */
+    public function createModuleApi(array $module): array
+    {
+        return [
+            'getRevision' => function(): string {
+                return $this->getRevision();
+            },
+            'onDiagnostic' => function(callable $handler, array $options = []) use ($module): callable {
+                $subscription = [
+                    'id' => uniqid('diagnostic_', true),
+                    'moduleId' => $module['id'] ?? null,
+                    'handler' => $handler,
+                    'level' => $options['level'] ?? Logger::DEFAULT_LEVEL,
+                ];
+                $this->moduleDiagnosticSubscriptions[] = $subscription;
+
+                return function() use ($subscription): void {
+                    $this->moduleDiagnosticSubscriptions = array_values(array_filter(
+                        $this->moduleDiagnosticSubscriptions,
+                        static fn(array $existing): bool => $existing['id'] !== $subscription['id']
+                    ));
+                };
+            },
+            'reportDiagnostic' => function(array $diagnostic) use ($module): void {
+                $this->reportDiagnostic($diagnostic, $module);
+            },
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     */
+    public function clearModuleDiagnosticSubscriptions(array $module): void
+    {
+        $moduleId = $module['id'] ?? null;
+        $this->moduleDiagnosticSubscriptions = array_values(array_filter(
+            $this->moduleDiagnosticSubscriptions,
+            static fn(array $subscription): bool => $subscription['moduleId'] !== $moduleId
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $diagnostic
+     * @param array<string, mixed>|null $sourceModule
+     */
+    public function reportDiagnostic(array $diagnostic, ?array $sourceModule = null): void
+    {
+        $diagnostic['level'] = $diagnostic['level'] ?? 'info';
+        if ($sourceModule && isset($sourceModule['name']) && !isset($diagnostic['moduleName'])) {
+            $diagnostic['moduleName'] = $sourceModule['name'];
+        }
+
+        foreach ($this->moduleDiagnosticSubscriptions as $subscription) {
+            if ($sourceModule && ($subscription['moduleId'] ?? null) === ($sourceModule['id'] ?? null)) {
+                continue;
+            }
+
+            if (!$this->levelAllows($diagnostic['level'], $subscription['level'])) {
+                continue;
+            }
+
+            ($subscription['handler'])($diagnostic);
+        }
+
+        $instanceLevel = method_exists($this->logger, 'getLevel') ? $this->logger->getLevel() : Logger::DEFAULT_LEVEL;
+        if ($this->levelAllows($diagnostic['level'], $instanceLevel)) {
+            if ($this->onDiagnostic) {
+                ($this->onDiagnostic)($diagnostic);
+            } else {
+                $context = $diagnostic['details'] ?? $diagnostic;
+                unset($context['level'], $context['message']);
+                $this->logger->log(
+                    $this->normalizeLogLevel($diagnostic['level']),
+                    $diagnostic['message'] ?? ($diagnostic['code'] ?? 'diagnostic'),
+                    $context
+                );
+            }
+        }
+
+        if (in_array($this->normalizeLogLevel($diagnostic['level']), [LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], true)) {
+            $this->emitter->trigger('error', $diagnostic);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $previous
+     * @param array<string, mixed> $incoming
+     * @return array<string, mixed>
+     */
+    private function mergeDatafiles(array $previous, array $incoming): array
+    {
+        return array_merge($previous, $incoming, [
+            'segments' => array_merge($previous['segments'] ?? [], $incoming['segments'] ?? []),
+            'features' => array_merge($previous['features'] ?? [], $incoming['features'] ?? []),
+        ]);
+    }
+
+    private function normalizeLogLevel(string $level): string
+    {
+        if ($level === 'fatal') {
+            return LogLevel::EMERGENCY;
+        }
+
+        if ($level === 'warn') {
+            return LogLevel::WARNING;
+        }
+
+        return $level;
+    }
+
+    private function levelAllows(string $diagnosticLevel, string $configuredLevel): bool
+    {
+        $levels = [
+            LogLevel::EMERGENCY,
+            LogLevel::ALERT,
+            LogLevel::CRITICAL,
+            LogLevel::ERROR,
+            LogLevel::WARNING,
+            LogLevel::NOTICE,
+            LogLevel::INFO,
+            LogLevel::DEBUG,
+        ];
+
+        $diagnosticLevel = $this->normalizeLogLevel($diagnosticLevel);
+        $configuredLevel = $this->normalizeLogLevel($configuredLevel);
+
+        if (!in_array($diagnosticLevel, $levels, true) || !in_array($configuredLevel, $levels, true)) {
+            return false;
+        }
+
+        return array_search($configuredLevel, $levels, true) >= array_search($diagnosticLevel, $levels, true);
     }
 
     /**
@@ -209,7 +402,7 @@ class Featurevisor
         return array_merge($options, [
             'context' => $this->getContext($context),
             'logger' => $this->logger,
-            'hooksManager' => $this->hooksManager,
+            'modulesManager' => $this->modulesManager,
             'datafileReader' => $this->datafileReader,
             'sticky' => $sticky,
             'defaultVariationValue' => $options['defaultVariationValue'] ?? null,
@@ -240,7 +433,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'flag',
             'featureKey' => $featureKey
         ]));
@@ -285,7 +478,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'variation',
             'featureKey' => $featureKey
         ]));
@@ -348,7 +541,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'variable',
             'featureKey' => $featureKey,
             'variableKey' => $variableKey

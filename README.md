@@ -1,8 +1,8 @@
 # Featurevisor PHP SDK <!-- omit in toc -->
 
-This is a port of Featurevisor [Javascript SDK](https://featurevisor.com/docs/sdks/javascript/) v2.x to PHP, providing a way to evaluate feature flags, variations, and variables in your PHP applications.
+This is a port of Featurevisor [Javascript SDK](https://featurevisor.com/docs/sdks/javascript/) v3.x to PHP, providing a way to evaluate feature flags, variations, and variables in your PHP applications.
 
-This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 projects and above.
+This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 projects and v2 datafiles.
 
 ## Table of contents <!-- omit in toc -->
 
@@ -33,9 +33,10 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [`context_set`](#context_set)
   - [`sticky_set`](#sticky_set)
 - [Evaluation details](#evaluation-details)
-- [Hooks](#hooks)
-  - [Defining a hook](#defining-a-hook)
-  - [Registering hooks](#registering-hooks)
+- [Diagnostics](#diagnostics)
+- [Modules](#modules)
+  - [Defining a module](#defining-a-module)
+  - [Registering modules](#registering-modules)
 - [Child instance](#child-instance)
 - [Close](#close)
 - [CLI usage](#cli-usage)
@@ -336,6 +337,14 @@ You may also initialize the SDK without passing `datafile`, and set it later on:
 $f->setDatafile($datafileContent);
 ```
 
+In v3, `setDatafile($datafileContent)` merges the incoming datafile into the existing one by default. This is useful when you receive partial Target datafiles.
+
+To replace the stored datafile completely, pass `true` as the second argument:
+
+```php
+$f->setDatafile($datafileContent, true);
+```
+
 ### Updating datafile
 
 You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile_set) event that you can listen and react to accordingly.
@@ -426,6 +435,7 @@ $unsubscribe = $f->on('datafile_set', function ($event) {
   $revision = $event['revision']; // new revision
   $previousRevision = $event['previousRevision'];
   $revisionChanged = $event['revisionChanged']; // true if revision has changed
+  $replaced = $event['replaced']; // true if datafile was replaced instead of merged
 
   // list of feature keys that have new updates,
   // and you should re-evaluate them
@@ -500,20 +510,53 @@ And optionally these properties depending on whether you are evaluating a featur
 - `variableValue`: the variable value
 - `variableSchema`: the variable schema
 
-## Hooks
+## Diagnostics
 
-Hooks allow you to intercept the evaluation process and customize it further as per your needs.
-
-### Defining a hook
-
-A hook is a simple object with a unique required `name` and optional functions:
+Diagnostics are structured SDK messages for initialization, datafile updates, module reports, and errors. You can subscribe to them at initialization time:
 
 ```php
-$myCustomHook = [
-  // only required property
-  'name' => 'my-custom-hook',
+$f = Featurevisor::createInstance([
+  'onDiagnostic' => function (array $diagnostic) {
+    $level = $diagnostic['level'];
+    $code = $diagnostic['code'] ?? null;
+    $message = $diagnostic['message'] ?? null;
 
-  // rest of the properties below are all optional per hook
+    // send to your own observability system
+  },
+]);
+```
+
+If `onDiagnostic` is not provided, diagnostics are written through the configured logger. Error-level diagnostics also emit the SDK `error` event.
+
+## Modules
+
+Modules allow you to intercept the evaluation process, report diagnostics, and customize behavior further as per your needs.
+
+### Defining a module
+
+A module is a simple object with a unique required `name` and optional functions:
+
+```php
+$myCustomModule = [
+  // only required property
+  'name' => 'my-custom-module',
+
+  // rest of the properties below are all optional per module
+
+  // setup receives a module API
+  'setup' => function ($api) {
+    $revision = $api['getRevision']();
+
+    $unsubscribe = $api['onDiagnostic'](function (array $diagnostic) {
+      // observe diagnostics reported by other modules or the SDK
+    });
+
+    $api['reportDiagnostic']([
+      'level' => 'info',
+      'code' => 'custom_module_ready',
+      'message' => 'Custom module is ready',
+    ]);
+  },
 
   // before evaluation
   'before' => function ($options) {
@@ -562,19 +605,24 @@ $myCustomHook = [
     // return custom bucket value
     return $bucketValue;
   },
+
+  // cleanup
+  'close' => function () {
+    // release module resources
+  },
 ];
 ```
 
-### Registering hooks
+### Registering modules
 
-You can register hooks at the time of SDK initialization:
+You can register modules at the time of SDK initialization:
 
 ```php
 use Featurevisor\Featurevisor;
 
 $f = Featurevisor::createInstance([
-  'hooks' => [
-    $myCustomHook
+  'modules' => [
+    $myCustomModule
   ],
 ]);
 ```
@@ -582,9 +630,12 @@ $f = Featurevisor::createInstance([
 Or after initialization:
 
 ```php
-$removeHook = $f->addHook($myCustomHook);
+$removeModule = $f->addModule($myCustomModule);
 
-// $removeHook()
+// $removeModule()
+
+// or remove later by name
+$f->removeModule('my-custom-module');
 ```
 
 ## Child instance
@@ -630,7 +681,7 @@ Similar to parent SDK, child instances also support several additional methods:
 
 ## Close
 
-Both primary and child instances support a `.close()` method, that removes forgotten event listeners (via `on` method) and cleans up any potential memory leaks.
+Both primary and child instances support a `.close()` method. The primary instance also closes registered modules and removes diagnostic subscriptions.
 
 ```php
 $f->close();
@@ -656,12 +707,12 @@ $ vendor/bin/featurevisor test \
     --quiet|verbose \
     --onlyFailures \
     --keyPattern="myFeatureKey" \
-    --assertionPattern="#1" \
-    --with-tags \
-    --with-scopes
+    --assertionPattern="#1"
 ```
 
-If your assertions include `scope`, run tests with `--with-scopes` to evaluate against scoped datafiles generated on the fly via `npx featurevisor build --scope=<scopeName> --environment=<env> --json`.
+If assertions include `target`, the runner builds and selects the corresponding Target datafile automatically via `npx featurevisor build --target=<target> --environment=<env> --json`.
+
+Legacy `--with-scopes`, `--with-tags`, and schema-version flags are accepted for older scripts but ignored in v3.
 
 ### Benchmark
 
@@ -708,6 +759,12 @@ $ composer install
 
 ```
 $ composer test
+```
+
+To run the SDK against Featurevisor example-1 from the local monorepo checkout:
+
+```
+$ make test-example-1
 ```
 
 ### Releasing
