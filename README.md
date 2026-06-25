@@ -23,6 +23,9 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
   - [Initialize with sticky](#initialize-with-sticky)
   - [Set sticky afterwards](#set-sticky-afterwards)
 - [Setting datafile](#setting-datafile)
+  - [Merging by default](#merging-by-default)
+  - [Replacing](#replacing)
+  - [Loading datafiles on demand](#loading-datafiles-on-demand)
   - [Updating datafile](#updating-datafile)
 - [Logging](#logging)
   - [Levels](#levels)
@@ -32,6 +35,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
   - [`datafile_set`](#datafile_set)
   - [`context_set`](#context_set)
   - [`sticky_set`](#sticky_set)
+  - [`error`](#error)
 - [Evaluation details](#evaluation-details)
 - [Diagnostics](#diagnostics)
 - [Modules](#modules)
@@ -337,12 +341,45 @@ You may also initialize the SDK without passing `datafile`, and set it later on:
 $f->setDatafile($datafileContent);
 ```
 
-In v3, `setDatafile($datafileContent)` merges the incoming datafile into the existing one by default. This is useful when you receive partial Target datafiles.
+### Merging by default
+
+By default, `setDatafile($datafileContent)` merges the incoming datafile with the SDK instance's existing datafile:
+
+- incoming `features` and `segments` override matching keys
+- existing `features` and `segments` that are missing from the incoming datafile are kept
+- `revision`, `schemaVersion`, and `featurevisorVersion` are taken from the incoming datafile
+
+This means you can call `setDatafile` more than once with different datafiles, and the SDK instance accumulates their features and segments together.
+
+### Replacing
 
 To replace the stored datafile completely, pass `true` as the second argument:
 
 ```php
 $f->setDatafile($datafileContent, true);
+```
+
+### Loading datafiles on demand
+
+Because merging is the default, a single SDK instance can start with a small datafile and load more datafiles later as your application needs them, instead of downloading every feature upfront.
+
+This pairs well with [targets](https://featurevisor.com/docs/targets/), where each target produces a smaller datafile for a specific part of your application:
+
+```php
+$f = Featurevisor::createInstance([]);
+
+function loadDatafile($f, string $target): void {
+  $url = "https://cdn.yoursite.com/production/featurevisor-$target.json";
+  $datafile = json_decode(file_get_contents($url), true);
+
+  // merges into whatever was loaded before
+  $f->setDatafile($datafile);
+}
+
+loadDatafile($f, 'products');
+
+// later, when the user reaches checkout
+loadDatafile($f, 'checkout');
 ```
 
 ### Updating datafile
@@ -475,6 +512,14 @@ $unsubscribe = $f->on('sticky_set', function ($event) {
   $features = $event['features']; // list of all affected feature keys
 
   echo "Sticky features set";
+});
+```
+
+### `error`
+
+```php
+$unsubscribe = $f->on('error', function ($diagnostic) {
+  echo $diagnostic['message'];
 });
 ```
 

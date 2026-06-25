@@ -29,6 +29,7 @@ function parseCliOption(array $argv, string $key) {
 }
 
 $cwd = getcwd();
+$argv = $_SERVER['argv'] ?? [];
 
 $cliOptions = [
     '0' => $argv[1] ?? null,
@@ -119,7 +120,10 @@ function buildSingleDatafile(
     ?string $target = null
 ): array {
     $command = "(cd " . escapeshellarg($featurevisorProjectPath) . " && npx featurevisor build --json";
-    $command .= " --environment=" . escapeshellarg($environment);
+
+    if ($environment !== false && $environment !== null && $environment !== '') {
+        $command .= " --environment=" . escapeshellarg($environment);
+    }
 
     if ($target) {
         $command .= " --target=" . escapeshellarg($target);
@@ -133,26 +137,62 @@ function buildSingleDatafile(
     return is_array($decoded) ? $decoded : [];
 }
 
-function getTargetDatafileKey($environment, string $target): string {
-    $environmentKey = ($environment === false || $environment === null || $environment === '')
-        ? 'false'
+function getEnvironmentList(array $config): array {
+    $environments = $config['environments'] ?? false;
+
+    if ($environments === false || $environments === null) {
+        return [false];
+    }
+
+    if (is_array($environments) && count($environments) > 0) {
+        return $environments;
+    }
+
+    return [false];
+}
+
+function getBaseDatafileKey($environment) {
+    return ($environment === false || $environment === null || $environment === '')
+        ? false
         : (string) $environment;
+}
+
+function getTargetDatafileKey($environment, string $target): string {
+    $baseDatafileKey = getBaseDatafileKey($environment);
+    $environmentKey = $baseDatafileKey === false
+        ? 'false'
+        : (string) $baseDatafileKey;
 
     return $environmentKey . '-target-' . $target;
+}
+
+function getDatafileForAssertion(array $assertion, array $datafilesByKey): ?array {
+    $baseDatafileKey = getBaseDatafileKey($assertion['environment'] ?? false);
+    $target = $assertion['target'] ?? null;
+
+    if (is_string($target)) {
+        $targetDatafileKey = getTargetDatafileKey($baseDatafileKey, $target);
+        if (isset($datafilesByKey[$targetDatafileKey])) {
+            return $datafilesByKey[$targetDatafileKey];
+        }
+    }
+
+    return $datafilesByKey[$baseDatafileKey] ?? null;
 }
 
 function buildDatafiles(string $featurevisorProjectPath, array $config, array $targets = []): array {
     $datafilesByKey = [];
 
-    $environments = $config['environments'] ?? [];
+    $environments = getEnvironmentList($config);
 
     foreach ($environments as $environment) {
-        echo "Building datafile for environment: $environment..." . PHP_EOL;
-        $datafilesByKey[$environment] = buildSingleDatafile($featurevisorProjectPath, $environment);
+        $baseDatafileKey = getBaseDatafileKey($environment);
+        echo "Building datafile for environment: " . ($baseDatafileKey === false ? 'default' : $baseDatafileKey) . "..." . PHP_EOL;
+        $datafilesByKey[$baseDatafileKey] = buildSingleDatafile($featurevisorProjectPath, $environment);
 
         foreach ($targets as $target) {
-            echo "Building target datafile for environment: $environment, target: $target..." . PHP_EOL;
-            $datafilesByKey[getTargetDatafileKey($environment, $target)] = buildSingleDatafile(
+            echo "Building target datafile for environment: " . ($baseDatafileKey === false ? 'default' : $baseDatafileKey) . ", target: $target..." . PHP_EOL;
+            $datafilesByKey[getTargetDatafileKey($baseDatafileKey, $target)] = buildSingleDatafile(
                 $featurevisorProjectPath,
                 $environment,
                 $target
@@ -366,7 +406,6 @@ function test(array $cliOptions) {
     $featurevisorProjectPath = $cliOptions['rootDirectoryPath'];
 
     $config = getConfig($featurevisorProjectPath);
-    $environments = $config['environments'];
     $segmentsByKey = getSegments($featurevisorProjectPath);
     $targets = getTargets($featurevisorProjectPath);
     $datafilesByKey = buildDatafiles($featurevisorProjectPath, $config, $targets);
@@ -398,22 +437,15 @@ function test(array $cliOptions) {
 
             if (isset($test["feature"])) {
                 $environment = $assertion["environment"] ?? null;
-                if (!$environment || !isset($datafilesByKey[$environment])) {
+                $datafile = getDatafileForAssertion($assertion, $datafilesByKey);
+
+                if (!$datafile) {
                     $testResult = [
                         'hasError' => true,
                         'errors' => "      ✘ missing datafile for environment: " . json_encode($environment) . PHP_EOL,
                         'duration' => 0
                     ];
                 } else {
-                    $datafile = $datafilesByKey[$environment];
-
-                    if (isset($assertion["target"])) {
-                        $targetDatafileKey = getTargetDatafileKey($environment, $assertion["target"]);
-                        if (isset($datafilesByKey[$targetDatafileKey])) {
-                            $datafile = $datafilesByKey[$targetDatafileKey];
-                        }
-                    }
-
                     $f = Featurevisor::createInstance([
                         'datafile' => $datafile,
                         'logger' => Logger::create([
@@ -611,12 +643,14 @@ function assessDistribution(array $cliOptions) {
 /**
  * Main
  */
-if ($cliOptions['0'] === 'test') {
-    test($cliOptions);
-} else if ($cliOptions['0'] === 'benchmark') {
-    benchmark($cliOptions);
-} else if ($cliOptions['0'] === 'assess-distribution') {
-    assessDistribution($cliOptions);
-} else {
-    echo "Learn more at https://featurevisor.com/docs/sdks/php/" . PHP_EOL;
+if (!defined('FEATUREVISOR_CLI_TEST')) {
+    if ($cliOptions['0'] === 'test') {
+        test($cliOptions);
+    } else if ($cliOptions['0'] === 'benchmark') {
+        benchmark($cliOptions);
+    } else if ($cliOptions['0'] === 'assess-distribution') {
+        assessDistribution($cliOptions);
+    } else {
+        echo "Learn more at https://featurevisor.com/docs/sdks/php/" . PHP_EOL;
+    }
 }
