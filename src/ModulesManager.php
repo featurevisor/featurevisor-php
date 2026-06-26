@@ -107,12 +107,10 @@ class ModulesManager
         $this->modules = $remainingModules;
 
         foreach ($removedModules as $module) {
-            if (isset($module['close']) && is_callable($module['close'])) {
-                $module['close']();
-            }
             if ($this->clearModuleDiagnosticSubscriptions) {
                 ($this->clearModuleDiagnosticSubscriptions)($module);
             }
+            $this->closeModule($module);
         }
     }
 
@@ -176,15 +174,35 @@ class ModulesManager
     public function closeAll(): void
     {
         foreach ($this->modules as $module) {
-            if (isset($module['close']) && is_callable($module['close'])) {
-                $module['close']();
-            }
             if ($this->clearModuleDiagnosticSubscriptions) {
                 ($this->clearModuleDiagnosticSubscriptions)($module);
             }
+            $this->closeModule($module);
         }
 
         $this->modules = [];
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     */
+    private function closeModule(array $module): void
+    {
+        if (!isset($module['close']) || !is_callable($module['close'])) {
+            return;
+        }
+
+        try {
+            $module['close']();
+        } catch (\Throwable $error) {
+            $this->report([
+                'level' => 'error',
+                'code' => 'module_close_error',
+                'message' => 'Module close failed',
+                'moduleName' => $module['name'] ?? null,
+                'originalError' => $error,
+            ], null);
+        }
     }
 
     private function report(array $diagnostic, ?array $module = null): void

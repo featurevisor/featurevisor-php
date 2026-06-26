@@ -1595,9 +1595,89 @@ class FeaturevisorTest extends TestCase
         self::assertSame('duplicate_module', $diagnostics[0]['code']);
 
         $removeModule();
+        $sdk->addModule([
+            'name' => 'module-c',
+            'close' => function() use (&$closeCalls) {
+                $closeCalls++;
+            },
+        ]);
+        $sdk->removeModule('module-c');
         $sdk->close();
 
-        self::assertSame(2, $closeCalls);
+        self::assertSame(3, $closeCalls);
+    }
+
+    public function testShouldReportModuleCloseErrorsAndContinueCleanup()
+    {
+        $diagnostics = [];
+        $errors = [];
+        $closed = [];
+
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::ERROR]),
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+            'modules' => [
+                [
+                    'name' => 'first',
+                    'close' => function() use (&$closed) {
+                        $closed[] = 'first';
+                        throw new \RuntimeException('first close failed');
+                    },
+                ],
+                [
+                    'name' => 'second',
+                    'close' => function() use (&$closed) {
+                        $closed[] = 'second';
+                    },
+                ],
+            ],
+        ]);
+        $sdk->on('error', function(array $event) use (&$errors) {
+            $errors[] = $event;
+        });
+
+        $sdk->close();
+
+        self::assertSame(['first', 'second'], $closed);
+        self::assertTrue(count(array_filter($diagnostics, fn($diagnostic) =>
+            ($diagnostic['code'] ?? null) === 'module_close_error'
+            && ($diagnostic['moduleName'] ?? null) === 'first'
+            && ($diagnostic['level'] ?? null) === 'error'
+            && ($diagnostic['originalError'] ?? null) instanceof \RuntimeException
+        )) > 0);
+        self::assertTrue(count(array_filter($errors, fn($event) =>
+            ($event['code'] ?? null) === 'module_close_error'
+            && ($event['moduleName'] ?? null) === 'first'
+        )) > 0);
+    }
+
+    public function testShouldReportModuleCloseErrorsFromUnsubscribeOnce()
+    {
+        $diagnostics = [];
+
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::ERROR]),
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+        ]);
+
+        $removeModule = $sdk->addModule([
+            'name' => 'dynamic',
+            'close' => function() {
+                throw new \RuntimeException('dynamic close failed');
+            },
+        ]);
+
+        $removeModule();
+        $removeModule();
+
+        self::assertSame(1, count(array_filter($diagnostics, fn($diagnostic) =>
+            ($diagnostic['code'] ?? null) === 'module_close_error'
+            && ($diagnostic['moduleName'] ?? null) === 'dynamic'
+        )));
     }
 
     public function testShouldSupportModuleDiagnosticsSubscriptions()

@@ -280,12 +280,9 @@ class DatafileReader
                 return false;
             }
             if (isset($groupSegments['not']) && is_array($groupSegments['not'])) {
-                foreach ($groupSegments['not'] as $subSegment) {
-                    if ($this->allSegmentsAreMatched($subSegment, $context)) {
-                        return false;
-                    }
-                }
-                return true;
+                return $this->allSegmentsAreMatched([
+                    'and' => $groupSegments['not'],
+                ], $context) === false;
             }
             // If it's a plain array, treat as AND (all must match)
             if (array_keys($groupSegments) === range(0, count($groupSegments) - 1)) {

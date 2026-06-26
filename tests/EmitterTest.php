@@ -38,4 +38,23 @@ class EmitterTest extends TestCase {
         $emitter->clearAll();
         self::assertEquals([], $emitter->listeners);
     }
+
+    public function testTriggerUsesListenerSnapshot() {
+        $emitter = new Emitter();
+        $calls = [];
+        $unsubscribeSecond = function(): void {};
+
+        $emitter->on('sticky_set', function() use (&$calls, &$unsubscribeSecond) {
+            $calls[] = 'first';
+            call_user_func($unsubscribeSecond);
+        });
+        $unsubscribeSecond = $emitter->on('sticky_set', function() use (&$calls) {
+            $calls[] = 'second';
+        });
+
+        $emitter->trigger('sticky_set');
+        $emitter->trigger('sticky_set');
+
+        self::assertSame(['first', 'second', 'first'], $calls);
+    }
 }

@@ -284,6 +284,14 @@ class ConditionsTest extends TestCase {
         self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome']));
         self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome', 'browser_version' => '2.0']));
         self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome', 'browser_version' => '1.0']));
+
+        $conditions = [[ 'not' => [[ 'or' => [
+            [ 'attribute' => 'browser_type', 'operator' => 'equals', 'value' => 'chrome' ],
+            [ 'attribute' => 'browser_type', 'operator' => 'equals', 'value' => 'firefox' ],
+        ]]]]];
+        self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome']));
+        self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'edge']));
+        self::assertFalse($this->datafileReader->allConditionsAreMatched([[ 'not' => [] ]], []));
     }
 
     public function testNestedConditions() {

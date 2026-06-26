@@ -173,5 +173,14 @@ class DatafileReaderTest extends TestCase {
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.7]));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.5']));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.5]));
+
+        $segments = ['not' => ['mobileUsers', 'netherlands']];
+        self::assertFalse($datafileReader->allSegmentsAreMatched($segments, ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($segments, ['country' => 'nl', 'deviceType' => 'desktop']));
+
+        $segments = ['not' => [[ 'or' => ['mobileUsers', 'desktopUsers'] ]]];
+        self::assertFalse($datafileReader->allSegmentsAreMatched($segments, ['deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($segments, ['deviceType' => 'tv']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched(['not' => []], []));
     }
 }
