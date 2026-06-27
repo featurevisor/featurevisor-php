@@ -3,6 +3,7 @@
 namespace Featurevisor\Tests;
 
 use DateTime;
+use Featurevisor\Conditions;
 use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
 use Featurevisor\DatafileReader;
@@ -292,6 +293,7 @@ class ConditionsTest extends TestCase {
         self::assertFalse($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'chrome']));
         self::assertTrue($this->datafileReader->allConditionsAreMatched($conditions, ['browser_type' => 'edge']));
         self::assertFalse($this->datafileReader->allConditionsAreMatched([[ 'not' => [] ]], []));
+        self::assertFalse(Conditions::conditionIsMatched(['not' => []], [], fn($regex, $flags) => '/' . $regex . '/' . $flags));
     }
 
     public function testNestedConditions() {
