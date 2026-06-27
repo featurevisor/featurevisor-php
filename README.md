@@ -459,6 +459,24 @@ $f = Featurevisor::createInstance([
 
 Further log levels like `info` and `debug` will help you understand how the feature variations and variables are evaluated in the runtime against given context.
 
+## Diagnostics
+
+Diagnostics are structured SDK messages for initialization, datafile updates, module reports, and errors. You can subscribe to them at initialization time:
+
+```php
+$f = Featurevisor::createInstance([
+  'onDiagnostic' => function (array $diagnostic) {
+    $level = $diagnostic['level'];
+    $code = $diagnostic['code'] ?? null;
+    $message = $diagnostic['message'] ?? null;
+
+    // send to your own observability system
+  },
+]);
+```
+
+If `onDiagnostic` is not provided, diagnostics are written through the configured logger. Error-level diagnostics also emit the SDK `error` event.
+
 ## Events
 
 Featurevisor SDK implements a simple event emitter that allows you to listen to events that happen in the runtime.
@@ -554,24 +572,6 @@ And optionally these properties depending on whether you are evaluating a featur
 - `variableKey`: the variable key
 - `variableValue`: the variable value
 - `variableSchema`: the variable schema
-
-## Diagnostics
-
-Diagnostics are structured SDK messages for initialization, datafile updates, module reports, and errors. You can subscribe to them at initialization time:
-
-```php
-$f = Featurevisor::createInstance([
-  'onDiagnostic' => function (array $diagnostic) {
-    $level = $diagnostic['level'];
-    $code = $diagnostic['code'] ?? null;
-    $message = $diagnostic['message'] ?? null;
-
-    // send to your own observability system
-  },
-]);
-```
-
-If `onDiagnostic` is not provided, diagnostics are written through the configured logger. Error-level diagnostics also emit the SDK `error` event.
 
 ## Modules
 
