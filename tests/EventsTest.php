@@ -6,7 +6,7 @@ use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Events;
-use Featurevisor\DatafileReader;
+use Featurevisor\Internal\DatafileReader;
 
 class EventsTest extends TestCase
 {

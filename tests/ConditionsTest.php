@@ -4,9 +4,9 @@ namespace Featurevisor\Tests;
 
 use DateTime;
 use Featurevisor\Conditions;
+use Featurevisor\Internal\DatafileReader;
 use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
-use Featurevisor\DatafileReader;
 
 class ConditionsTest extends TestCase {
     private DatafileReader $datafileReader;

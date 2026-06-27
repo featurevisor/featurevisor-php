@@ -1,7 +1,8 @@
 <?php
 
-namespace Featurevisor;
+namespace Featurevisor\Internal;
 
+use Featurevisor\Conditions;
 use Exception;
 use InvalidArgumentException;
 use JsonException;

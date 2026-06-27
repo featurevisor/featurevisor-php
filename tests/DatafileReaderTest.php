@@ -3,8 +3,8 @@
 namespace Featurevisor\Tests;
 
 use Featurevisor\Logger;
+use Featurevisor\Internal\DatafileReader;
 use PHPUnit\Framework\TestCase;
-use Featurevisor\DatafileReader;
 
 class DatafileReaderTest extends TestCase {
 

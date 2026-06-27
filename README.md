@@ -757,8 +757,6 @@ $ vendor/bin/featurevisor test \
 
 If assertions include `target`, the runner builds and selects the corresponding Target datafile automatically via `npx featurevisor build --target=<target> --environment=<env> --json`.
 
-Legacy `--with-scopes`, `--with-tags`, and schema-version flags are accepted for older scripts but ignored in v3.
-
 ### Benchmark
 
 Learn more about benchmarking [here](https://featurevisor.com/docs/cli/#benchmarking).

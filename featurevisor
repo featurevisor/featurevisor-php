@@ -3,8 +3,8 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Featurevisor\DatafileReader;
 use Featurevisor\Featurevisor;
+use Featurevisor\Internal\DatafileReader;
 use Featurevisor\Logger;
 use Psr\Log\LogLevel;
 

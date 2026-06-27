@@ -3,6 +3,7 @@
 namespace Featurevisor;
 
 use Closure;
+use Featurevisor\Internal\DatafileReader;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 

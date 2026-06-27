@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\DatafileReader;
+
 class Events
 {
     public static function getParamsForStickySetEvent(array $previousStickyFeatures = [], array $newStickyFeatures = [], bool $replace = false): array
