@@ -117,7 +117,8 @@ function getTargets(string $featurevisorProjectPath): array {
 function buildSingleDatafile(
     string $featurevisorProjectPath,
     $environment,
-    ?string $target = null
+    ?string $target = null,
+    $inflate = null
 ): array {
     $command = "(cd " . escapeshellarg($featurevisorProjectPath) . " && npx featurevisor build --json";
 
@@ -127,6 +128,10 @@ function buildSingleDatafile(
 
     if ($target) {
         $command .= " --target=" . escapeshellarg($target);
+    }
+
+    if ($inflate !== null && (int) $inflate > 0) {
+        $command .= " --inflate=" . escapeshellarg((string) $inflate);
     }
 
     $command .= ")";
@@ -525,7 +530,12 @@ function benchmark(array $cliOptions) {
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
 
     $level = getLoggerLevel($cliOptions);
-    $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment']);
+    $datafile = buildSingleDatafile(
+        $featurevisorProjectPath,
+        $cliOptions['environment'],
+        null,
+        $cliOptions['inflate']
+    );
 
     $f = Featurevisor::createInstance([
         'datafile' => $datafile,
@@ -548,8 +558,11 @@ function benchmark(array $cliOptions) {
 
     echo "Running $cliOptions[n] times..." . PHP_EOL;
 
-    $startTime = microtime(true);
+    $totalDuration = 0.0;
+    $minDuration = null;
+    $maxDuration = 0.0;
     for ($i = 0; $i < $cliOptions['n']; $i++) {
+        $evaluationStartTime = hrtime(true);
         if ($cliOptions['variation']) {
             $value = $f->getVariation($cliOptions['feature'], $context);
         } else if ($cliOptions['variable']) {
@@ -557,13 +570,19 @@ function benchmark(array $cliOptions) {
         } else {
             $value = $f->isEnabled($cliOptions['feature'], $context);
         }
+        $evaluationDuration = (hrtime(true) - $evaluationStartTime) / 1000000000;
+        $totalDuration += $evaluationDuration;
+        $minDuration = $minDuration === null ? $evaluationDuration : min($minDuration, $evaluationDuration);
+        $maxDuration = max($maxDuration, $evaluationDuration);
     }
 
-    $duration = microtime(true) - $startTime;
+    $duration = $totalDuration;
 
     echo "Evaluated value: " . json_encode($value) . PHP_EOL;
     echo "Total duration: " . number_format($duration * 1000, 3) . "ms" . PHP_EOL;
-    echo "Average duration: " . number_format(($duration / $cliOptions['n']) * 1000, 3) . "ms" . PHP_EOL;
+    echo "Minimum duration: " . number_format(($minDuration ?? 0) * 1000, 6) . "ms" . PHP_EOL;
+    echo "Average duration: " . number_format(($duration / $cliOptions['n']) * 1000, 6) . "ms" . PHP_EOL;
+    echo "Maximum duration: " . number_format($maxDuration * 1000, 6) . "ms" . PHP_EOL;
 }
 
 /**
