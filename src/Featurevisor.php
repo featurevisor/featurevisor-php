@@ -101,7 +101,7 @@ class Featurevisor
             $this->reportDiagnostic([
                 'level' => 'info',
                 'code' => 'datafile_set',
-                'message' => 'datafile set',
+                'message' => 'Datafile set',
                 'details' => $details,
             ]);
             $this->emitter->trigger('datafile_set', $details);
@@ -134,7 +134,12 @@ class Featurevisor
 
         $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->sticky, $replace);
 
-        $this->logger->info('sticky features set', $params);
+        $this->reportDiagnostic([
+            'level' => 'info',
+            'code' => 'sticky_set',
+            'message' => 'Sticky features set',
+            'details' => $params,
+        ]);
         $this->emitter->trigger('sticky_set', $params);
     }
 
@@ -213,9 +218,14 @@ class Featurevisor
             'replaced' => $replace
         ]);
 
-        $this->logger->debug($replace ? 'context replaced' : 'context updated', [
-            'context' => $this->context,
-            'replaced' => $replace
+        $this->reportDiagnostic([
+            'level' => 'debug',
+            'code' => 'context_set',
+            'message' => $replace ? 'Context replaced' : 'Context updated',
+            'details' => [
+                'context' => $this->context,
+                'replaced' => $replace,
+            ],
         ]);
     }
 

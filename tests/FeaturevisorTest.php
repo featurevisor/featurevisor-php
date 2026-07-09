@@ -23,6 +23,31 @@ class FeaturevisorTest extends TestCase
         self::assertTrue(method_exists($sdk, 'getVariation'));
     }
 
+    public function testShouldReportLifecycleMutationDiagnostics()
+    {
+        $diagnostics = [];
+        $sdk = Featurevisor::createInstance([
+            'logger' => Logger::create(['level' => LogLevel::DEBUG]),
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+        ]);
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => '1',
+            'segments' => [],
+            'features' => [],
+        ]);
+        $sdk->setSticky(['test' => ['enabled' => true]]);
+        $sdk->setContext(['country' => 'nl']);
+
+        $codes = array_column($diagnostics, 'code');
+        self::assertContains('datafile_set', $codes);
+        self::assertContains('sticky_set', $codes);
+        self::assertContains('context_set', $codes);
+    }
+
     public function testShouldCreateInstanceWithLogLevel()
     {
         $logs = [];
