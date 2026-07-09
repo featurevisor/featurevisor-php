@@ -70,7 +70,7 @@ class Child
         return $this->parent->isEnabled(
             $featureKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -79,7 +79,7 @@ class Child
         return $this->parent->getVariation(
             $featureKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -89,7 +89,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -99,7 +99,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -109,7 +109,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -119,7 +119,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -129,7 +129,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -139,7 +139,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -149,7 +149,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -159,7 +159,7 @@ class Child
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 
@@ -168,7 +168,7 @@ class Child
         return $this->parent->getAllEvaluations(
             array_merge($this->context, $context),
             $featureKeys,
-            array_merge(['sticky' => $this->sticky], $options)
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
         );
     }
 }

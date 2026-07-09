@@ -283,6 +283,15 @@ class Featurevisor
         if ($sourceModule && isset($sourceModule['name']) && !isset($diagnostic['moduleName'])) {
             $diagnostic['moduleName'] = $sourceModule['name'];
         }
+        $details = is_array($diagnostic['details'] ?? null) ? $diagnostic['details'] : [];
+        $reservedKeys = ['level', 'code', 'message', 'module', 'moduleName', 'originalError', 'details'];
+        foreach ($diagnostic as $key => $value) {
+            if (!in_array($key, $reservedKeys, true)) {
+                $details[$key] = $value;
+                unset($diagnostic[$key]);
+            }
+        }
+        $diagnostic['details'] = $details;
 
         foreach ($this->moduleDiagnosticSubscriptions as $subscription) {
             if ($sourceModule && ($subscription['moduleId'] ?? null) === ($sourceModule['id'] ?? null)) {
@@ -301,12 +310,10 @@ class Featurevisor
             if ($this->onDiagnostic) {
                 ($this->onDiagnostic)($diagnostic);
             } else {
-                $context = $diagnostic['details'] ?? $diagnostic;
-                unset($context['level'], $context['message']);
                 $this->logger->log(
                     $this->normalizeLogLevel($diagnostic['level']),
                     $diagnostic['message'] ?? ($diagnostic['code'] ?? 'diagnostic'),
-                    $context
+                    $diagnostic
                 );
             }
         }
@@ -377,7 +384,7 @@ class Featurevisor
     /**
      * @param array<string, mixed> $context
      * @param array{
-     *     sticky?: array<string, mixed>
+     *     __featurevisorChildSticky?: array<string, mixed>
      * } $options
      * @return Child
      */
@@ -396,20 +403,13 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     __featurevisorChildSticky?: array<string, mixed>
      * } $options
      * @return array
      */
     private function getEvaluationDependencies(array $context, array $options = []): array
     {
-        $sticky = $this->sticky;
-        if (isset($options['sticky'])) {
-            if ($this->sticky && is_array($this->sticky) && is_array($options['sticky'])) {
-                $sticky = array_merge($this->sticky, $options['sticky']);
-            } else {
-                $sticky = $options['sticky'];
-            }
-        }
+        $sticky = $options['__featurevisorChildSticky'] ?? $this->sticky;
         return array_merge($options, [
             'context' => $this->getContext($context),
             'logger' => $this->logger,
@@ -428,7 +428,7 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     __featurevisorChildSticky?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -455,8 +455,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function isEnabled(string $featureKey, array $context = [], array $options = []): bool
@@ -471,8 +470,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -500,8 +498,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return mixed|null
      */
@@ -535,8 +532,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -564,8 +560,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return mixed|null
      */
@@ -605,8 +600,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
@@ -620,8 +614,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
@@ -635,8 +628,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
@@ -650,8 +642,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
@@ -665,8 +656,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
@@ -680,8 +670,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
@@ -695,8 +684,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array<mixed>|mixed|null
      */
@@ -723,7 +711,6 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
      * } $options
      * @return array<string, mixed>
      */
