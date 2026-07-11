@@ -15,11 +15,19 @@ class Helpers
                 case 'string':
                     return is_string($value) ? $value : null;
                 case 'integer':
-                    return intval($value);
+                    if (is_int($value)) {
+                        return $value;
+                    }
+                    if (is_float($value) && is_finite($value) && floor($value) === $value) {
+                        return (int) $value;
+                    }
+                    return null;
                 case 'double':
-                    return floatval($value);
+                    return (is_int($value) || is_float($value)) && is_finite((float) $value)
+                        ? (float) $value
+                        : null;
                 case 'boolean':
-                    return $value === true;
+                    return is_bool($value) ? $value : null;
                 case 'array':
                     return is_array($value) ? $value : null;
                 case 'object':

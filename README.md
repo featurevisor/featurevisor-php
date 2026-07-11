@@ -253,6 +253,8 @@ $f->getVariableObject($featureKey, $variableKey, $context = []);
 $f->getVariableJSON($featureKey, $variableKey, $context = []);
 ```
 
+Type specific methods do not coerce values. `getVariableInteger()` returns `null` for the string `"1"`, and boolean getters return `null` for non-boolean values.
+
 ## Getting all evaluations
 
 You can get evaluations of all features available in the SDK instance:
@@ -479,7 +481,9 @@ $f = Featurevisor::createInstance([
 
 If `onDiagnostic` is not provided, diagnostics are written through the configured logger. Error-level diagnostics also emit the SDK `error` event.
 
-Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` array. Optional `module`, `moduleName`, and `originalError` fields describe provenance; evaluation metadata belongs in `details`.
+Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` value. Optional `module`, `moduleName`, and `originalError` fields describe provenance; evaluation metadata belongs in `details`.
+
+Diagnostic handlers are isolated from SDK behavior. An exception in a handler does not stop other handlers or evaluations.
 
 ## Events
 
@@ -584,6 +588,8 @@ Modules allow you to intercept the evaluation process, report diagnostics, and c
 ### Defining a module
 
 A module is a simple object with a unique required `name` and optional functions:
+
+If `setup` throws, the module is not registered. Featurevisor removes subscriptions created during setup, reports `module_setup_error`, and calls `close` when present.
 
 ```php
 $myCustomModule = [

@@ -291,7 +291,7 @@ class Featurevisor
                 unset($diagnostic[$key]);
             }
         }
-        $diagnostic['details'] = $details;
+        $diagnostic['details'] = $details === [] ? (object) [] : $details;
 
         foreach ($this->moduleDiagnosticSubscriptions as $subscription) {
             if ($sourceModule && ($subscription['moduleId'] ?? null) === ($sourceModule['id'] ?? null)) {
@@ -302,13 +302,21 @@ class Featurevisor
                 continue;
             }
 
-            ($subscription['handler'])($diagnostic);
+            try {
+                ($subscription['handler'])($diagnostic);
+            } catch (\Throwable $error) {
+                error_log('[Featurevisor] Diagnostic handler failed: '.$error->getMessage());
+            }
         }
 
         $instanceLevel = method_exists($this->logger, 'getLevel') ? $this->logger->getLevel() : Logger::DEFAULT_LEVEL;
         if ($this->levelAllows($diagnostic['level'], $instanceLevel)) {
             if ($this->onDiagnostic) {
-                ($this->onDiagnostic)($diagnostic);
+                try {
+                    ($this->onDiagnostic)($diagnostic);
+                } catch (\Throwable $error) {
+                    error_log('[Featurevisor] Diagnostic handler failed: '.$error->getMessage());
+                }
             } else {
                 $this->logger->log(
                     $this->normalizeLogLevel($diagnostic['level']),

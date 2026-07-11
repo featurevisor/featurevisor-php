@@ -8,6 +8,19 @@ use PHPUnit\Framework\TestCase;
 
 class DatafileReaderTest extends TestCase {
 
+    public function testSharedV3ConformanceFixture(): void
+    {
+        $fixture = json_decode(file_get_contents(__DIR__.'/../conformance/sdk-v3.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $fixture['version']);
+
+        $reader = DatafileReader::createEmpty(Logger::create(['level' => 'emergency']));
+        $traffic = ['allocation' => $fixture['bucketing']['allocations']];
+        foreach ($fixture['bucketing']['allocationExpectations'] as $bucket => $expected) {
+            $allocation = $reader->getMatchedAllocation($traffic, (int) $bucket);
+            self::assertSame($expected, $allocation['variation']);
+        }
+    }
+
     public function testV2DatafileSchemaEntities() {
         $datafileJson = [
             'schemaVersion' => '2',
@@ -128,7 +141,7 @@ class DatafileReaderTest extends TestCase {
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
         // dutchMobileUsers2 (same as above)
-        $group = $groups[1];
+        $group = $groups[2];
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));

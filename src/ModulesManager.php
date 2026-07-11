@@ -73,8 +73,23 @@ class ModulesManager
         }
 
         if (isset($module['setup']) && is_callable($module['setup']) && $this->moduleApiFactory) {
-            $api = ($this->moduleApiFactory)($module);
-            $module['setup']($api);
+            try {
+                $api = ($this->moduleApiFactory)($module);
+                $module['setup']($api);
+            } catch (\Throwable $error) {
+                if ($this->clearModuleDiagnosticSubscriptions) {
+                    ($this->clearModuleDiagnosticSubscriptions)($module);
+                }
+                $this->report([
+                    'level' => 'error',
+                    'code' => 'module_setup_error',
+                    'message' => 'Module setup failed',
+                    'moduleName' => $module['name'] ?? null,
+                    'originalError' => $error,
+                ], null);
+                $this->closeModule($module);
+                return null;
+            }
         }
 
         $this->modules[] = $module;
