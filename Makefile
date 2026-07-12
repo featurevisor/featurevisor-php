@@ -20,6 +20,6 @@ update-monorepo:
 
 test-example-1:
 	composer test
-	./featurevisor test --projectDirectoryPath="/Users/fahad/Projects/featurevisor/featurevisor/examples/example-1" --onlyFailures
+	./featurevisor test --projectDirectoryPath="../featurevisor/examples/example-1" --onlyFailures
 
 test-example-project: test-example-1
