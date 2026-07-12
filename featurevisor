@@ -28,6 +28,20 @@ function parseCliOption(array $argv, string $key) {
     return null;
 }
 
+function parseCliOptions(array $argv, string $key): array {
+    $prefix = '--' . $key . '=';
+    $values = [];
+    foreach ($argv as $arg) {
+        if (strpos($arg, $prefix) === 0) {
+            $value = substr($arg, strlen($prefix));
+            if ($value !== '' && !in_array($value, $values, true)) {
+                $values[] = $value;
+            }
+        }
+    }
+    return $values;
+}
+
 $cwd = getcwd();
 $argv = $_SERVER['argv'] ?? [];
 
@@ -56,6 +70,7 @@ $cliOptions = [
         }
         return $acc;
     }, []),
+    'targets' => parseCliOptions($argv, 'target'),
 ];
 
 if (parseCliOption($argv, 'rootDirectoryPath')) {
@@ -69,7 +84,11 @@ if (parseCliOption($argv, 'rootDirectoryPath')) {
  */
 function executeCommand(string $command): string {
     $output = [];
-    exec($command, $output);
+    $exitCode = 0;
+    exec($command . ' 2>&1', $output, $exitCode);
+    if ($exitCode !== 0) {
+        throw new RuntimeException("Command failed with exit code $exitCode: " . implode("\n", $output));
+    }
     return implode("\n", $output);
 }
 
@@ -412,7 +431,8 @@ function test(array $cliOptions) {
 
     $config = getConfig($featurevisorProjectPath);
     $segmentsByKey = getSegments($featurevisorProjectPath);
-    $targets = getTargets($featurevisorProjectPath);
+    $availableTargets = getTargets($featurevisorProjectPath);
+    $targets = count($cliOptions['targets']) > 0 ? $cliOptions['targets'] : $availableTargets;
     $datafilesByKey = buildDatafiles($featurevisorProjectPath, $config, $targets);
 
     echo PHP_EOL;
@@ -433,6 +453,14 @@ function test(array $cliOptions) {
     foreach ($tests as $test) {
         $testKey = $test['key'];
         $assertions = $test["assertions"];
+        if (isset($test['feature']) && count($cliOptions['targets']) > 0) {
+            $assertions = array_values(array_filter($assertions, function ($assertion) use ($cliOptions) {
+                return !isset($assertion['target']) || in_array($assertion['target'], $cliOptions['targets'], true);
+            }));
+            if (count($assertions) === 0) {
+                continue;
+            }
+        }
         $results = "";
         $testHasError = false;
         $testDuration = 0;
@@ -527,13 +555,22 @@ function benchmark(array $cliOptions) {
         return;
     }
 
+    if (count($cliOptions['targets']) > 1) {
+        foreach ($cliOptions['targets'] as $target) {
+            $selected = $cliOptions;
+            $selected['targets'] = [$target];
+            benchmark($selected);
+        }
+        return;
+    }
+
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
 
     $level = getLoggerLevel($cliOptions);
     $datafile = buildSingleDatafile(
         $featurevisorProjectPath,
         $cliOptions['environment'],
-        null,
+        $cliOptions['targets'][0] ?? null,
         $cliOptions['inflate']
     );
 
@@ -545,6 +582,12 @@ function benchmark(array $cliOptions) {
     ]);
 
     $value = null;
+
+    echo PHP_EOL . "Benchmark Featurevisor feature" . PHP_EOL;
+    echo "  Feature: $cliOptions[feature]" . PHP_EOL;
+    echo "  Environment: $cliOptions[environment]" . PHP_EOL;
+    if (isset($cliOptions['targets'][0])) echo "  Target: " . $cliOptions['targets'][0] . PHP_EOL;
+    echo "  Iterations: $cliOptions[n]" . PHP_EOL;
 
     if ($cliOptions['variation']) {
         echo "Benchmarking variation for feature '$cliOptions[feature]'..." . PHP_EOL;
@@ -601,10 +644,19 @@ function assessDistribution(array $cliOptions) {
         return;
     }
 
+    if (count($cliOptions['targets']) > 1) {
+        foreach ($cliOptions['targets'] as $target) {
+            $selected = $cliOptions;
+            $selected['targets'] = [$target];
+            assessDistribution($selected);
+        }
+        return;
+    }
+
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
     $populateUuid = $cliOptions['populateUuid'];
 
-    $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment']);
+    $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment'], $cliOptions['targets'][0] ?? null, $cliOptions['inflate']);
     $level = getLoggerLevel($cliOptions);
 
     $f = Featurevisor::createInstance([
@@ -615,6 +667,12 @@ function assessDistribution(array $cliOptions) {
     ]);
 
     $value = null;
+
+    echo PHP_EOL . "Assess Featurevisor distribution" . PHP_EOL;
+    echo "  Feature: $cliOptions[feature]" . PHP_EOL;
+    echo "  Environment: $cliOptions[environment]" . PHP_EOL;
+    if (isset($cliOptions['targets'][0])) echo "  Target: " . $cliOptions['targets'][0] . PHP_EOL;
+    echo "  Iterations: $cliOptions[n]" . PHP_EOL;
 
     if ($cliOptions['variation']) {
         echo "Assessing distribution for feature '$cliOptions[feature]'..." . PHP_EOL;

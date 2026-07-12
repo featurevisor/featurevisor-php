@@ -6,6 +6,14 @@ use PHPUnit\Framework\TestCase;
 
 class FeaturevisorCliTest extends TestCase
 {
+    public function testRepeatedTargetOptions()
+    {
+        self::assertSame(
+            ['web', 'mobile'],
+            \parseCliOptions(['featurevisor', 'test', '--target=web', '--target=mobile', '--target=web'], 'target')
+        );
+    }
+
     public static function setUpBeforeClass(): void
     {
         if (!defined('FEATUREVISOR_CLI_TEST')) {
