@@ -7,6 +7,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
 ## Table of contents <!-- omit in toc -->
 
 - [Installation](#installation)
+- [Public API](#public-api)
 - [Initialization](#initialization)
 - [Evaluation types](#evaluation-types)
 - [Context](#context)
@@ -27,17 +28,15 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
   - [Replacing](#replacing)
   - [Loading datafiles on demand](#loading-datafiles-on-demand)
   - [Updating datafile](#updating-datafile)
-- [Logging](#logging)
+- [Evaluation details](#evaluation-details)
+- [Diagnostics](#diagnostics)
   - [Levels](#levels)
-  - [Customizing levels](#customizing-levels)
   - [Handler](#handler)
 - [Events](#events)
   - [`datafile_set`](#datafile_set)
   - [`context_set`](#context_set)
   - [`sticky_set`](#sticky_set)
   - [`error`](#error)
-- [Evaluation details](#evaluation-details)
-- [Diagnostics](#diagnostics)
 - [Modules](#modules)
   - [Defining a module](#defining-a-module)
   - [Registering modules](#registering-modules)
@@ -63,6 +62,20 @@ In your PHP application, install the SDK using [Composer](https://getcomposer.or
 $ composer require featurevisor/featurevisor-php
 ```
 
+## Public API
+
+The main runtime API is `Featurevisor::createFeaturevisor()`:
+
+```php
+use Featurevisor\Featurevisor;
+
+$f = Featurevisor::createFeaturevisor([
+  "datafile" => $datafileContent,
+]);
+```
+
+Most applications only need this factory and the returned `Featurevisor` instance. Public extension and observability APIs include modules, diagnostics, events, and the datafile arrays accepted by the factory.
+
 ## Initialization
 
 The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/building-datafiles/) content directly:
@@ -77,7 +90,7 @@ $datafileUrl = "https://cdn.yoursite.com/datafile.json";
 $datafileContent = file_get_contents($datafileUrl);
 $datafileContent = json_decode($datafileContent, true);
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "datafile" => $datafileContent
 ]);
 ```
@@ -117,7 +130,7 @@ You can set context at the time of initialization:
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "context" => [
     "deviceId" => "123",
     "country" => "nl",
@@ -292,7 +305,7 @@ Sticky values belong to an SDK or child instance. Evaluation options do not acce
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "sticky" => [
     "myFeatureKey" => [
       "enabled" => true,
@@ -370,7 +383,7 @@ Because merging is the default, a single SDK instance can start with a small dat
 This pairs well with [targets](https://featurevisor.com/docs/targets/), where each target produces a smaller datafile for a specific part of your application:
 
 ```php
-$f = Featurevisor::createInstance([]);
+$f = Featurevisor::createFeaturevisor([]);
 
 function loadDatafile($f, string $target): void {
   $url = "https://cdn.yoursite.com/production/featurevisor-$target.json";
@@ -397,93 +410,41 @@ The triggers for setting the datafile again can be:
   - a specific event in your application (like a user action), or
   - an event served via websocket or server-sent events (SSE)
 
-## Logging
+## Diagnostics
 
-By default, Featurevisor SDKs will print out logs to the console for `info` level and above.
-Featurevisor PHP-SDK by default uses [PSR-3 standard](https://www.php-fig.org/psr/psr-3/) simple implementation.
-You can also choose from many mature implementations like e.g. [Monolog](https://github.com/Seldaek/monolog)
+By default, Featurevisor reports diagnostics to the console for `info` level and above with a `[Featurevisor]` prefix.
 
 ### Levels
 
-These are all the available log levels:
+Available diagnostic levels are `fatal`, `error`, `warn`, `info`, and `debug`.
 
-- `error`
-- `warning`
-- `info`
-- `debug`
-
-### Customizing levels
-
-If you choose `debug` level to make the logs more verbose, you can set it at the time of SDK initialization.
-
-Setting `debug` level will print out all logs, including `info`, `warning`, and `error` levels.
+Set the level during initialization or update it afterwards:
 
 ```php
-use Featurevisor\Featurevisor;
-use Featurevisor\Logger;
-
-$f = Featurevisor::createInstance([
-  "logger" => Logger::create([
-    "level" => "debug",
-  ]),
-]);
-```
-
-Alternatively, you can also set `logLevel` directly:
-
-```php
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "logLevel" => "debug",
 ]);
-```
 
-You can also set log level from SDK instance afterwards:
-
-```php
-$f->setLogLevel("debug");
+$f->setLogLevel("info");
 ```
 
 ### Handler
 
-You can also pass your own log handler, if you do not wish to print the logs to the console:
+Use `onDiagnostic` to send structured diagnostics to your observability system:
 
 ```php
-use Featurevisor\Featurevisor;
-use Featurevisor\Logger;
-
-$f = Featurevisor::createInstance([
-  "logger" => Logger::create([
-    "level" => "info",
-    "handler" => function ($level, $message, $details) {
-      // do something with the log
-    },
-  ]),
-]);
-```
-
-Further log levels like `info` and `debug` will help you understand how the feature variations and variables are evaluated in the runtime against given context.
-
-## Diagnostics
-
-Diagnostics are structured SDK messages for initialization, datafile updates, module reports, and errors. You can subscribe to them at initialization time:
-
-```php
-$f = Featurevisor::createInstance([
-  'onDiagnostic' => function (array $diagnostic) {
-    $level = $diagnostic['level'];
-    $code = $diagnostic['code'] ?? null;
-    $message = $diagnostic['message'] ?? null;
-
-    // send to your own observability system
+$f = Featurevisor::createFeaturevisor([
+  "logLevel" => "info",
+  "onDiagnostic" => function (array $diagnostic) {
+    // send $diagnostic to your observability system
   },
 ]);
 ```
 
-If `onDiagnostic` is not provided, diagnostics are written through the configured logger. Error-level diagnostics also emit the SDK `error` event.
-
-Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` value. Optional `module`, `moduleName`, and `originalError` fields describe provenance; evaluation metadata belongs in `details`.
+Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` value. Optional `module`, `moduleName`, and `originalError` fields describe provenance. Evaluation metadata belongs in `details`.
 
 Diagnostic handlers are isolated from SDK behavior. An exception in a handler does not stop other handlers or evaluations.
+
 
 ## Events
 
@@ -675,7 +636,7 @@ You can register modules at the time of SDK initialization:
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   'modules' => [
     $myCustomModule
   ],

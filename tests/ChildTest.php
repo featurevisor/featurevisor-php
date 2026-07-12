@@ -7,7 +7,7 @@ use PHPUnit\Framework\TestCase;
 
 class ChildTest extends TestCase {
     public function testCreateChildInstanceAndAllBehaviors() {
-        $f = Featurevisor::createInstance([
+        $f = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',

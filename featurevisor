@@ -479,7 +479,7 @@ function test(array $cliOptions) {
                         'duration' => 0
                     ];
                 } else {
-                    $f = Featurevisor::createInstance([
+                    $f = Featurevisor::createFeaturevisor([
                         'datafile' => $datafile,
                         'logger' => Logger::create([
                           'level' => $level,
@@ -574,7 +574,7 @@ function benchmark(array $cliOptions) {
         $cliOptions['inflate']
     );
 
-    $f = Featurevisor::createInstance([
+    $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
         'logger' => Logger::create([
           'level' => $level,
@@ -659,7 +659,7 @@ function assessDistribution(array $cliOptions) {
     $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment'], $cliOptions['targets'][0] ?? null, $cliOptions['inflate']);
     $level = getLoggerLevel($cliOptions);
 
-    $f = Featurevisor::createInstance([
+    $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
         'logger' => Logger::create([
           'level' => $level,

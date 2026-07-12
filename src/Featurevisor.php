@@ -25,7 +25,6 @@ class Featurevisor
      * @param array{
      *     datafile?: string|array<string, mixed>,
      *     logLevel?: LogLevel::*|string,
-     *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
      *     modules?: array<array{
@@ -38,7 +37,7 @@ class Featurevisor
      * } $options
      * @return self
      */
-    public static function createInstance(array $options = []): self
+    public static function createFeaturevisor(array $options = []): self
     {
         return new self($options);
     }
@@ -46,10 +45,39 @@ class Featurevisor
     /**
      * @param array<string, mixed> $options
      */
-    public function __construct(array $options = [])
+    private function __construct(array $options = [])
     {
-        $this->logger = $options['logger'] ?? Logger::create([
+        $this->logger = Logger::create([
             'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+            'handler' => function (string $level, string $message, ?array $details = null): void {
+                $details = $details ?? [];
+                $message = preg_replace('/^\[Featurevisor\]\s*/', '', $message);
+                if ($level === LogLevel::WARNING) {
+                    $level = 'warn';
+                } elseif (in_array($level, [LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL], true)) {
+                    $level = 'fatal';
+                }
+                $code = isset($details['reason']) ? (string) $details['reason'] : $message;
+                if ($message === 'feature is deprecated') {
+                    $code = 'deprecated_feature';
+                } elseif ($message === 'variable is deprecated') {
+                    $code = 'deprecated_variable';
+                } elseif ($message === 'feature not found') {
+                    $code = 'feature_not_found';
+                } elseif ($message === 'variable schema not found') {
+                    $code = 'variable_not_found';
+                } elseif ($message === 'no variations') {
+                    $code = 'no_variations';
+                } elseif ($message === 'invalid bucketBy') {
+                    $code = 'invalid_bucket_by';
+                }
+                $this->reportDiagnostic([
+                    'level' => $level,
+                    'code' => $code,
+                    'message' => $message,
+                    'details' => $details,
+                ]);
+            },
         ]);
         $this->emitter = new Emitter();
         $this->context = $options['context'] ?? [];
@@ -146,6 +174,31 @@ class Featurevisor
     public function getRevision(): string
     {
         return $this->datafileReader->getRevision();
+    }
+
+    public function getSchemaVersion(): string
+    {
+        return $this->datafileReader->getSchemaVersion();
+    }
+
+    public function getSegment(string $segmentKey): ?array
+    {
+        return $this->datafileReader->getSegment($segmentKey);
+    }
+
+    public function getFeatureKeys(): array
+    {
+        return $this->datafileReader->getFeatureKeys();
+    }
+
+    public function getVariableKeys(string $featureKey): array
+    {
+        return $this->datafileReader->getVariableKeys($featureKey);
+    }
+
+    public function hasVariations(string $featureKey): bool
+    {
+        return $this->datafileReader->hasVariations($featureKey);
     }
 
     public function getFeature(string $featureKey): ?array
@@ -318,7 +371,7 @@ class Featurevisor
                     error_log('[Featurevisor] Diagnostic handler failed: '.$error->getMessage());
                 }
             } else {
-                $this->logger->log(
+                Logger::create(['level' => $this->logger->getLevel()])->log(
                     $this->normalizeLogLevel($diagnostic['level']),
                     $diagnostic['message'] ?? ($diagnostic['code'] ?? 'diagnostic'),
                     $diagnostic
@@ -392,7 +445,7 @@ class Featurevisor
     /**
      * @param array<string, mixed> $context
      * @param array{
-     *     __featurevisorChildSticky?: array<string, mixed>
+     *     sticky?: array<string, mixed>
      * } $options
      * @return Child
      */

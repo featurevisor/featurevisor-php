@@ -10,7 +10,7 @@ class DiagnosticContractTest extends TestCase
     public function testEmptyDetailsSerializeAsAnObject(): void
     {
         $diagnostics = [];
-        Featurevisor::createInstance([
+        Featurevisor::createFeaturevisor([
             'logLevel' => 'info',
             'onDiagnostic' => static function (array $diagnostic) use (&$diagnostics): void {
                 $diagnostics[] = $diagnostic;
@@ -23,7 +23,7 @@ class DiagnosticContractTest extends TestCase
 
     public function testDiagnosticHandlerFailureIsIsolated(): void
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'onDiagnostic' => static function (): void {
                 throw new \RuntimeException('handler failed');
             },
