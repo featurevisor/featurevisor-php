@@ -66,7 +66,7 @@ class ModulesManager
                         'code' => 'duplicate_module',
                         'message' => 'Duplicate module name',
                         'moduleName' => $module['name'],
-                    ], $module);
+                    ], null);
                     return null;
                 }
             }

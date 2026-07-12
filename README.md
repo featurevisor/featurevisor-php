@@ -505,10 +505,12 @@ $unsubscribe = $f->on('sticky_set', function ($event) {
 ### `error`
 
 ```php
-$unsubscribe = $f->on('error', function ($diagnostic) {
-  echo $diagnostic['message'];
+$unsubscribe = $f->on('error', function ($event) {
+  echo $event['diagnostic']['message'];
 });
 ```
+
+The `error` event is emitted for diagnostics whose level is `error`.
 
 ## Evaluation details
 

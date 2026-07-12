@@ -4,13 +4,12 @@ namespace Featurevisor;
 
 use Closure;
 use Featurevisor\Internal\DatafileReader;
-use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
 class Featurevisor
 {
     private array $context;
-    private LoggerInterface $logger;
+    private Logger $logger;
     private ?array $sticky;
     private DatafileReader $datafileReader;
     private ModulesManager $modulesManager;
@@ -88,9 +87,15 @@ class Featurevisor
         $this->datafileReader = DatafileReader::createEmpty($this->logger);
         $this->modulesManager = ModulesManager::createFromOptions([
             'modules' => $options['modules'] ?? [],
-            'reportDiagnostic' => [$this, 'reportDiagnostic'],
-            'moduleApiFactory' => [$this, 'createModuleApi'],
-            'clearModuleDiagnosticSubscriptions' => [$this, 'clearModuleDiagnosticSubscriptions'],
+            'reportDiagnostic' => function(array $diagnostic, ?array $module = null): void {
+                $this->reportDiagnostic($diagnostic, $module);
+            },
+            'moduleApiFactory' => function(array $module): array {
+                return $this->createModuleApi($module);
+            },
+            'clearModuleDiagnosticSubscriptions' => function(array $module): void {
+                $this->clearModuleDiagnosticSubscriptions($module);
+            },
         ]);
 
         if (isset($options['datafile'])) {
@@ -100,7 +105,7 @@ class Featurevisor
         $this->reportDiagnostic([
             'level' => 'info',
             'code' => 'sdk_initialized',
-            'message' => 'Featurevisor SDK initialized',
+            'message' => 'SDK initialized',
         ]);
     }
 
@@ -133,12 +138,13 @@ class Featurevisor
                 'details' => $details,
             ]);
             $this->emitter->trigger('datafile_set', $details);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->reportDiagnostic([
                 'level' => 'error',
                 'code' => 'invalid_datafile',
                 'message' => 'Could not parse datafile',
-                'error' => $e->getMessage(),
+                'originalError' => $e,
+                'details' => [],
             ]);
         }
     }
@@ -208,9 +214,7 @@ class Featurevisor
 
     public function setLogLevel(string $level): void
     {
-        if (method_exists($this->logger, 'setLevel')) {
-            $this->logger->setLevel($level);
-        }
+        $this->logger->setLevel($level);
     }
 
     public function addModule(array $module): ?callable
@@ -286,7 +290,7 @@ class Featurevisor
      * @param array<string, mixed> $module
      * @return array<string, callable>
      */
-    public function createModuleApi(array $module): array
+    private function createModuleApi(array $module): array
     {
         return [
             'getRevision' => function(): string {
@@ -317,7 +321,7 @@ class Featurevisor
     /**
      * @param array<string, mixed> $module
      */
-    public function clearModuleDiagnosticSubscriptions(array $module): void
+    private function clearModuleDiagnosticSubscriptions(array $module): void
     {
         $moduleId = $module['id'] ?? null;
         $this->moduleDiagnosticSubscriptions = array_values(array_filter(
@@ -330,11 +334,11 @@ class Featurevisor
      * @param array<string, mixed> $diagnostic
      * @param array<string, mixed>|null $sourceModule
      */
-    public function reportDiagnostic(array $diagnostic, ?array $sourceModule = null): void
+    private function reportDiagnostic(array $diagnostic, ?array $sourceModule = null): void
     {
         $diagnostic['level'] = $diagnostic['level'] ?? 'info';
-        if ($sourceModule && isset($sourceModule['name']) && !isset($diagnostic['moduleName'])) {
-            $diagnostic['moduleName'] = $sourceModule['name'];
+        if ($sourceModule && isset($sourceModule['name']) && !isset($diagnostic['module'])) {
+            $diagnostic['module'] = $sourceModule['name'];
         }
         $details = is_array($diagnostic['details'] ?? null) ? $diagnostic['details'] : [];
         $reservedKeys = ['level', 'code', 'message', 'module', 'moduleName', 'originalError', 'details'];
@@ -362,7 +366,7 @@ class Featurevisor
             }
         }
 
-        $instanceLevel = method_exists($this->logger, 'getLevel') ? $this->logger->getLevel() : Logger::DEFAULT_LEVEL;
+        $instanceLevel = $this->logger->getLevel();
         if ($this->levelAllows($diagnostic['level'], $instanceLevel)) {
             if ($this->onDiagnostic) {
                 try {
@@ -379,8 +383,8 @@ class Featurevisor
             }
         }
 
-        if (in_array($this->normalizeLogLevel($diagnostic['level']), [LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], true)) {
-            $this->emitter->trigger('error', $diagnostic);
+        if ($diagnostic['level'] === 'error') {
+            $this->emitter->trigger('error', ['diagnostic' => $diagnostic]);
         }
     }
 

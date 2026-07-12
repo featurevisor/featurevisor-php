@@ -9,9 +9,8 @@ use Psr\Log\LogLevel;
 
 class FeaturevisorTest extends TestCase
 {
-    public function testV3FactoryIsTheOnlyFactory()
+    public function testLegacyFactoryIsAbsent()
     {
-        self::assertTrue(method_exists(Featurevisor::class, 'createFeaturevisor'));
         self::assertFalse(method_exists(Featurevisor::class, 'createInstance'));
     }
 
@@ -1672,8 +1671,8 @@ class FeaturevisorTest extends TestCase
             && ($diagnostic['originalError'] ?? null) instanceof \RuntimeException
         )) > 0);
         self::assertTrue(count(array_filter($errors, fn($event) =>
-            ($event['code'] ?? null) === 'module_close_error'
-            && ($event['moduleName'] ?? null) === 'first'
+            ($event['diagnostic']['code'] ?? null) === 'module_close_error'
+            && ($event['diagnostic']['moduleName'] ?? null) === 'first'
         )) > 0);
     }
 
@@ -1730,17 +1729,18 @@ class FeaturevisorTest extends TestCase
         ]);
 
         $reporter([
-            'level' => 'warning',
+            'level' => 'warn',
             'code' => 'from_reporter',
             'message' => 'diagnostic from reporter',
         ]);
 
         self::assertCount(1, $received);
         self::assertSame('from_reporter', $received[0]['code']);
+        self::assertSame('reporter', $received[0]['module']);
 
         $sdk->removeModule('listener');
         $reporter([
-            'level' => 'warning',
+            'level' => 'warn',
             'code' => 'after_remove',
             'message' => 'after remove',
         ]);
