@@ -122,6 +122,13 @@ class Featurevisor
             $incomingDatafile = is_string($datafile)
                 ? json_decode($datafile, true, 512, JSON_THROW_ON_ERROR)
                 : $datafile;
+            if (!is_array($incomingDatafile)
+                || !is_string($incomingDatafile['schemaVersion'] ?? null)
+                || !is_string($incomingDatafile['revision'] ?? null)
+                || !is_array($incomingDatafile['segments'] ?? null)
+                || !is_array($incomingDatafile['features'] ?? null)) {
+                throw new \InvalidArgumentException('Invalid datafile');
+            }
             $nextDatafile = $replace
                 ? $incomingDatafile
                 : $this->mergeDatafiles($this->datafileReader->getDatafile(), $incomingDatafile);
@@ -301,7 +308,7 @@ class Featurevisor
                     'id' => uniqid('diagnostic_', true),
                     'moduleId' => $module['id'] ?? null,
                     'handler' => $handler,
-                    'level' => $options['level'] ?? Logger::DEFAULT_LEVEL,
+                    'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
                 ];
                 $this->moduleDiagnosticSubscriptions[] = $subscription;
 
@@ -337,7 +344,7 @@ class Featurevisor
     private function reportDiagnostic(array $diagnostic, ?array $sourceModule = null): void
     {
         $diagnostic['level'] = $diagnostic['level'] ?? 'info';
-        if ($sourceModule && isset($sourceModule['name']) && !isset($diagnostic['module'])) {
+        if ($sourceModule && isset($sourceModule['name'])) {
             $diagnostic['module'] = $sourceModule['name'];
         }
         $details = is_array($diagnostic['details'] ?? null) ? $diagnostic['details'] : [];

@@ -7,7 +7,6 @@ use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Psr\Log\LogLevel;
-use Stringable;
 
 /** @internal SDK infrastructure. Use diagnostics through Featurevisor instead. */
 final class Logger implements LoggerInterface

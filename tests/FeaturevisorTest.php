@@ -1716,7 +1716,7 @@ class FeaturevisorTest extends TestCase
                     'setup' => function(array $api) use (&$received) {
                         $api['onDiagnostic'](function(array $diagnostic) use (&$received) {
                             $received[] = $diagnostic;
-                        }, ['level' => LogLevel::WARNING]);
+                        }, ['logLevel' => 'warn']);
                     },
                 ],
                 [
