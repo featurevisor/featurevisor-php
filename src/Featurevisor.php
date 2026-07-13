@@ -3,26 +3,30 @@
 namespace Featurevisor;
 
 use Closure;
-use Psr\Log\LoggerInterface;
+use Featurevisor\Internal\DatafileReader;
 use Psr\Log\LogLevel;
 
 class Featurevisor
 {
     private array $context;
-    private LoggerInterface $logger;
+    private Logger $logger;
     private ?array $sticky;
     private DatafileReader $datafileReader;
-    private HooksManager $hooksManager;
+    private ModulesManager $modulesManager;
     private Emitter $emitter;
+    /** @var callable|null */
+    private $onDiagnostic;
+    /** @var array<int, array<string, mixed>> */
+    private array $moduleDiagnosticSubscriptions;
+    private bool $closed;
 
     /**
      * @param array{
      *     datafile?: string|array<string, mixed>,
      *     logLevel?: LogLevel::*|string,
-     *     logger?: LoggerInterface,
      *     context?: array<string, mixed>,
      *     sticky?: array<string, mixed>,
-     *     hooks?: array<array{
+     *     modules?: array<array{
      *         name: string,
      *         before?: Closure,
      *         after?: Closure,
@@ -32,59 +36,123 @@ class Featurevisor
      * } $options
      * @return self
      */
-    public static function createInstance(array $options): self
+    public static function createFeaturevisor(array $options = []): self
     {
-        $logger = $options['logger'] ?? Logger::create([
-            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
-        ]);
-
-        return new self(
-            isset($options['datafile'])
-                ? DatafileReader::createFromMixed($options['datafile'], $logger)
-                : DatafileReader::createEmpty($logger),
-            $logger,
-            HooksManager::createFromOptions($options),
-            new Emitter(),
-            $options['context'] ?? [],
-            $options['sticky'] ?? null
-        );
+        return new self($options);
     }
 
-    public function __construct(
-        DatafileReader $datafile,
-        LoggerInterface $logger,
-        HooksManager $hooksManager,
-        Emitter $emitter,
-        array $context = [],
-        ?array $sticky = null
-    )
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function __construct(array $options = [])
     {
-        $this->datafileReader = $datafile;
-        $this->logger = $logger;
-        $this->hooksManager = $hooksManager;
-        $this->sticky = $sticky;
-        $this->emitter = $emitter;
-        $this->context = $context;
+        $this->logger = Logger::create([
+            'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+            'handler' => function (string $level, string $message, ?array $details = null): void {
+                $details = $details ?? [];
+                $message = preg_replace('/^\[Featurevisor\]\s*/', '', $message);
+                if ($level === LogLevel::WARNING) {
+                    $level = 'warn';
+                } elseif (in_array($level, [LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL], true)) {
+                    $level = 'fatal';
+                }
+                $code = isset($details['reason']) ? (string) $details['reason'] : $message;
+                if ($message === 'feature is deprecated') {
+                    $code = 'deprecated_feature';
+                } elseif ($message === 'variable is deprecated') {
+                    $code = 'deprecated_variable';
+                } elseif ($message === 'feature not found') {
+                    $code = 'feature_not_found';
+                } elseif ($message === 'variable schema not found') {
+                    $code = 'variable_not_found';
+                } elseif ($message === 'no variations') {
+                    $code = 'no_variations';
+                } elseif ($message === 'invalid bucketBy') {
+                    $code = 'invalid_bucket_by';
+                }
+                $this->reportDiagnostic([
+                    'level' => $level,
+                    'code' => $code,
+                    'message' => $message,
+                    'details' => $details,
+                ]);
+            },
+        ]);
+        $this->emitter = new Emitter();
+        $this->context = $options['context'] ?? [];
+        $this->sticky = $options['sticky'] ?? null;
+        $this->onDiagnostic = $options['onDiagnostic'] ?? null;
+        $this->moduleDiagnosticSubscriptions = [];
+        $this->closed = false;
+        $this->datafileReader = DatafileReader::createEmpty($this->logger);
+        $this->modulesManager = ModulesManager::createFromOptions([
+            'modules' => $options['modules'] ?? [],
+            'reportDiagnostic' => function(array $diagnostic, ?array $module = null): void {
+                $this->reportDiagnostic($diagnostic, $module);
+            },
+            'moduleApiFactory' => function(array $module): array {
+                return $this->createModuleApi($module);
+            },
+            'clearModuleDiagnosticSubscriptions' => function(array $module): void {
+                $this->clearModuleDiagnosticSubscriptions($module);
+            },
+        ]);
 
-        $this->logger->info('Featurevisor SDK initialized');
+        if (isset($options['datafile'])) {
+            $this->setDatafile($options['datafile'], true);
+        }
+
+        $this->reportDiagnostic([
+            'level' => 'info',
+            'code' => 'sdk_initialized',
+            'message' => 'SDK initialized',
+        ]);
     }
 
     /**
      * @param string|array<string, mixed> $datafile
      */
-    public function setDatafile($datafile): void
+    public function setDatafile($datafile, bool $replace = false): void
     {
-        try {
-            $newDatafileReader = DatafileReader::createFromMixed($datafile, $this->logger);
+        if ($this->closed) {
+            return;
+        }
 
-            $details = Events::getParamsForDatafileSetEvent($this->datafileReader, $newDatafileReader);
+        try {
+            $incomingDatafile = is_string($datafile)
+                ? json_decode($datafile, true, 512, JSON_THROW_ON_ERROR)
+                : $datafile;
+            if (!is_array($incomingDatafile)
+                || !is_string($incomingDatafile['schemaVersion'] ?? null)
+                || !is_string($incomingDatafile['revision'] ?? null)
+                || !is_array($incomingDatafile['segments'] ?? null)
+                || !is_array($incomingDatafile['features'] ?? null)) {
+                throw new \InvalidArgumentException('Invalid datafile');
+            }
+            $nextDatafile = $replace
+                ? $incomingDatafile
+                : $this->mergeDatafiles($this->datafileReader->getDatafile(), $incomingDatafile);
+            $newDatafileReader = DatafileReader::createFromMixed($nextDatafile, $this->logger);
+
+            $details = Events::getParamsForDatafileSetEvent($this->datafileReader, $newDatafileReader, $replace);
 
             $this->datafileReader = $newDatafileReader;
 
-            $this->logger->info('datafile set', $details);
+            $this->reportDiagnostic([
+                'level' => 'info',
+                'code' => 'datafile_set',
+                'message' => 'Datafile set',
+                'details' => $details,
+            ]);
             $this->emitter->trigger('datafile_set', $details);
-        } catch (\Exception $e) {
-            $this->logger->error('could not parse datafile', ['error' => $e->getMessage(), 'exception' => $e]);
+        } catch (\Throwable $e) {
+            $this->reportDiagnostic([
+                'level' => 'error',
+                'code' => 'invalid_datafile',
+                'message' => 'Could not parse datafile',
+                'originalError' => $e,
+                'details' => [],
+            ]);
         }
     }
 
@@ -93,6 +161,10 @@ class Featurevisor
      */
     public function setSticky(array $sticky, bool $replace = false): void
     {
+        if ($this->closed) {
+            return;
+        }
+
         $previousStickyFeatures = $this->sticky ?? [];
 
         if ($replace) {
@@ -103,13 +175,43 @@ class Featurevisor
 
         $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->sticky, $replace);
 
-        $this->logger->info('sticky features set', $params);
+        $this->reportDiagnostic([
+            'level' => 'info',
+            'code' => 'sticky_set',
+            'message' => 'Sticky features set',
+            'details' => $params,
+        ]);
         $this->emitter->trigger('sticky_set', $params);
     }
 
     public function getRevision(): string
     {
         return $this->datafileReader->getRevision();
+    }
+
+    public function getSchemaVersion(): string
+    {
+        return $this->datafileReader->getSchemaVersion();
+    }
+
+    public function getSegment(string $segmentKey): ?array
+    {
+        return $this->datafileReader->getSegment($segmentKey);
+    }
+
+    public function getFeatureKeys(): array
+    {
+        return $this->datafileReader->getFeatureKeys();
+    }
+
+    public function getVariableKeys(string $featureKey): array
+    {
+        return $this->datafileReader->getVariableKeys($featureKey);
+    }
+
+    public function hasVariations(string $featureKey): bool
+    {
+        return $this->datafileReader->hasVariations($featureKey);
     }
 
     public function getFeature(string $featureKey): ?array
@@ -119,14 +221,28 @@ class Featurevisor
 
     public function setLogLevel(string $level): void
     {
-        if (method_exists($this->logger, 'setLevel')) {
-            $this->logger->setLevel($level);
-        }
+        $this->logger->setLevel($level);
     }
 
-    public function addHook(array $hook): ?callable
+    public function addModule(array $module): ?callable
     {
-        return $this->hooksManager->add($hook);
+        if ($this->closed) {
+            return null;
+        }
+
+        return $this->modulesManager->add($module);
+    }
+
+    /**
+     * @param string|array<string, mixed> $nameOrModule
+     */
+    public function removeModule($nameOrModule): void
+    {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->modulesManager->remove($nameOrModule);
     }
 
     public function on(string $eventName, callable $callback): callable
@@ -136,6 +252,13 @@ class Featurevisor
 
     public function close(): void
     {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->closed = true;
+        $this->modulesManager->closeAll();
+        $this->moduleDiagnosticSubscriptions = [];
         $this->emitter->clearAll();
     }
 
@@ -144,6 +267,10 @@ class Featurevisor
      */
     public function setContext(array $context, bool $replace = false): void
     {
+        if ($this->closed) {
+            return;
+        }
+
         if ($replace) {
             $this->context = $context;
         } else {
@@ -155,10 +282,166 @@ class Featurevisor
             'replaced' => $replace
         ]);
 
-        $this->logger->debug($replace ? 'context replaced' : 'context updated', [
-            'context' => $this->context,
-            'replaced' => $replace
+        $this->reportDiagnostic([
+            'level' => 'debug',
+            'code' => 'context_set',
+            'message' => $replace ? 'Context replaced' : 'Context updated',
+            'details' => [
+                'context' => $this->context,
+                'replaced' => $replace,
+            ],
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<string, callable>
+     */
+    private function createModuleApi(array $module): array
+    {
+        return [
+            'getRevision' => function(): string {
+                return $this->getRevision();
+            },
+            'onDiagnostic' => function(callable $handler, array $options = []) use ($module): callable {
+                $subscription = [
+                    'id' => uniqid('diagnostic_', true),
+                    'moduleId' => $module['id'] ?? null,
+                    'handler' => $handler,
+                    'level' => $options['logLevel'] ?? Logger::DEFAULT_LEVEL,
+                ];
+                $this->moduleDiagnosticSubscriptions[] = $subscription;
+
+                return function() use ($subscription): void {
+                    $this->moduleDiagnosticSubscriptions = array_values(array_filter(
+                        $this->moduleDiagnosticSubscriptions,
+                        static fn(array $existing): bool => $existing['id'] !== $subscription['id']
+                    ));
+                };
+            },
+            'reportDiagnostic' => function(array $diagnostic) use ($module): void {
+                $this->reportDiagnostic($diagnostic, $module);
+            },
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     */
+    private function clearModuleDiagnosticSubscriptions(array $module): void
+    {
+        $moduleId = $module['id'] ?? null;
+        $this->moduleDiagnosticSubscriptions = array_values(array_filter(
+            $this->moduleDiagnosticSubscriptions,
+            static fn(array $subscription): bool => $subscription['moduleId'] !== $moduleId
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $diagnostic
+     * @param array<string, mixed>|null $sourceModule
+     */
+    private function reportDiagnostic(array $diagnostic, ?array $sourceModule = null): void
+    {
+        $diagnostic['level'] = $diagnostic['level'] ?? 'info';
+        if ($sourceModule && isset($sourceModule['name'])) {
+            $diagnostic['module'] = $sourceModule['name'];
+        }
+        $details = is_array($diagnostic['details'] ?? null) ? $diagnostic['details'] : [];
+        $reservedKeys = ['level', 'code', 'message', 'module', 'moduleName', 'originalError', 'details'];
+        foreach ($diagnostic as $key => $value) {
+            if (!in_array($key, $reservedKeys, true)) {
+                $details[$key] = $value;
+                unset($diagnostic[$key]);
+            }
+        }
+        $diagnostic['details'] = $details === [] ? (object) [] : $details;
+
+        foreach ($this->moduleDiagnosticSubscriptions as $subscription) {
+            if ($sourceModule && ($subscription['moduleId'] ?? null) === ($sourceModule['id'] ?? null)) {
+                continue;
+            }
+
+            if (!$this->levelAllows($diagnostic['level'], $subscription['level'])) {
+                continue;
+            }
+
+            try {
+                ($subscription['handler'])($diagnostic);
+            } catch (\Throwable $error) {
+                error_log('[Featurevisor] Diagnostic handler failed: '.$error->getMessage());
+            }
+        }
+
+        $instanceLevel = $this->logger->getLevel();
+        if ($this->levelAllows($diagnostic['level'], $instanceLevel)) {
+            if ($this->onDiagnostic) {
+                try {
+                    ($this->onDiagnostic)($diagnostic);
+                } catch (\Throwable $error) {
+                    error_log('[Featurevisor] Diagnostic handler failed: '.$error->getMessage());
+                }
+            } else {
+                Logger::create(['level' => $this->logger->getLevel()])->log(
+                    $this->normalizeLogLevel($diagnostic['level']),
+                    $diagnostic['message'] ?? ($diagnostic['code'] ?? 'diagnostic'),
+                    $diagnostic
+                );
+            }
+        }
+
+        if ($diagnostic['level'] === 'error') {
+            $this->emitter->trigger('error', ['diagnostic' => $diagnostic]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $previous
+     * @param array<string, mixed> $incoming
+     * @return array<string, mixed>
+     */
+    private function mergeDatafiles(array $previous, array $incoming): array
+    {
+        return array_merge($previous, $incoming, [
+            'segments' => array_merge($previous['segments'] ?? [], $incoming['segments'] ?? []),
+            'features' => array_merge($previous['features'] ?? [], $incoming['features'] ?? []),
+        ]);
+    }
+
+    private function normalizeLogLevel(string $level): string
+    {
+        if ($level === 'fatal') {
+            return LogLevel::EMERGENCY;
+        }
+
+        if ($level === 'warn') {
+            return LogLevel::WARNING;
+        }
+
+        return $level;
+    }
+
+    private function levelAllows(string $diagnosticLevel, string $configuredLevel): bool
+    {
+        $levels = [
+            LogLevel::EMERGENCY,
+            LogLevel::ALERT,
+            LogLevel::CRITICAL,
+            LogLevel::ERROR,
+            LogLevel::WARNING,
+            LogLevel::NOTICE,
+            LogLevel::INFO,
+            LogLevel::DEBUG,
+        ];
+
+        $diagnosticLevel = $this->normalizeLogLevel($diagnosticLevel);
+        $configuredLevel = $this->normalizeLogLevel($configuredLevel);
+
+        if (!in_array($diagnosticLevel, $levels, true) || !in_array($configuredLevel, $levels, true)) {
+            return false;
+        }
+
+        return array_search($configuredLevel, $levels, true) >= array_search($diagnosticLevel, $levels, true);
     }
 
     /**
@@ -192,24 +475,17 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     __featurevisorChildSticky?: array<string, mixed>
      * } $options
      * @return array
      */
     private function getEvaluationDependencies(array $context, array $options = []): array
     {
-        $sticky = $this->sticky;
-        if (isset($options['sticky'])) {
-            if ($this->sticky && is_array($this->sticky) && is_array($options['sticky'])) {
-                $sticky = array_merge($this->sticky, $options['sticky']);
-            } else {
-                $sticky = $options['sticky'];
-            }
-        }
+        $sticky = $options['__featurevisorChildSticky'] ?? $this->sticky;
         return array_merge($options, [
             'context' => $this->getContext($context),
             'logger' => $this->logger,
-            'hooksManager' => $this->hooksManager,
+            'modulesManager' => $this->modulesManager,
             'datafileReader' => $this->datafileReader,
             'sticky' => $sticky,
             'defaultVariationValue' => $options['defaultVariationValue'] ?? null,
@@ -224,7 +500,7 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     __featurevisorChildSticky?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -240,7 +516,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'flag',
             'featureKey' => $featureKey
         ]));
@@ -251,8 +527,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function isEnabled(string $featureKey, array $context = [], array $options = []): bool
@@ -267,8 +542,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -285,7 +559,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'variation',
             'featureKey' => $featureKey
         ]));
@@ -296,8 +570,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return mixed|null
      */
@@ -331,8 +604,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array{
      *     type: string,
@@ -348,7 +620,7 @@ class Featurevisor
     {
         $deps = $this->getEvaluationDependencies($context, $options);
 
-        return Evaluate::evaluateWithHooks(array_merge($deps, [
+        return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'variable',
             'featureKey' => $featureKey,
             'variableKey' => $variableKey
@@ -360,8 +632,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return mixed|null
      */
@@ -401,8 +672,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
@@ -416,8 +686,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
@@ -431,8 +700,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
@@ -446,8 +714,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
@@ -461,8 +728,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
@@ -476,8 +742,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      */
     public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
@@ -491,8 +756,7 @@ class Featurevisor
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
-     *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
+     *     flagEvaluation?: array<string, mixed>
      * } $options
      * @return array<mixed>|mixed|null
      */
@@ -519,7 +783,6 @@ class Featurevisor
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      *     flagEvaluation?: array<string, mixed>,
-     *     sticky?: array<string, mixed>
      * } $options
      * @return array<string, mixed>
      */

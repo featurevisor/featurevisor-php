@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\DatafileReader;
+
 class Events
 {
     public static function getParamsForStickySetEvent(array $previousStickyFeatures = [], array $newStickyFeatures = [], bool $replace = false): array
@@ -18,7 +20,7 @@ class Events
         ];
     }
 
-    public static function getParamsForDatafileSetEvent(DatafileReader $previousDatafileReader, DatafileReader $newDatafileReader): array
+    public static function getParamsForDatafileSetEvent(DatafileReader $previousDatafileReader, DatafileReader $newDatafileReader, bool $replace = false): array
     {
         $previousRevision = $previousDatafileReader->getRevision();
         $previousFeatureKeys = $previousDatafileReader->getFeatureKeys();
@@ -64,7 +66,8 @@ class Events
             'revision' => $newRevision,
             'previousRevision' => $previousRevision,
             'revisionChanged' => $previousRevision !== $newRevision,
-            'features' => array_values($allAffectedFeatures)
+            'features' => array_values($allAffectedFeatures),
+            'replaced' => $replace
         ];
     }
 }

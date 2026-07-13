@@ -3,10 +3,23 @@
 namespace Featurevisor\Tests;
 
 use Featurevisor\Logger;
+use Featurevisor\Internal\DatafileReader;
 use PHPUnit\Framework\TestCase;
-use Featurevisor\DatafileReader;
 
 class DatafileReaderTest extends TestCase {
+
+    public function testSharedV3ConformanceFixture(): void
+    {
+        $fixture = json_decode(file_get_contents(__DIR__.'/../conformance/sdk-v3.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $fixture['version']);
+
+        $reader = DatafileReader::createEmpty(Logger::create(['level' => 'emergency']));
+        $traffic = ['allocation' => $fixture['bucketing']['allocations']];
+        foreach ($fixture['bucketing']['allocationExpectations'] as $bucket => $expected) {
+            $allocation = $reader->getMatchedAllocation($traffic, (int) $bucket);
+            self::assertSame($expected, $allocation['variation']);
+        }
+    }
 
     public function testV2DatafileSchemaEntities() {
         $datafileJson = [
@@ -128,7 +141,7 @@ class DatafileReaderTest extends TestCase {
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'de', 'deviceType' => 'mobile']));
         // dutchMobileUsers2 (same as above)
-        $group = $groups[1];
+        $group = $groups[2];
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile']));
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['country' => 'nl', 'deviceType' => 'mobile', 'browser' => 'chrome']));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], []));
@@ -173,5 +186,14 @@ class DatafileReaderTest extends TestCase {
         self::assertTrue($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.7]));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => '5.5']));
         self::assertFalse($datafileReader->allSegmentsAreMatched($group['segments'], ['version' => 5.5]));
+
+        $segments = ['not' => ['mobileUsers', 'netherlands']];
+        self::assertFalse($datafileReader->allSegmentsAreMatched($segments, ['country' => 'nl', 'deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($segments, ['country' => 'nl', 'deviceType' => 'desktop']));
+
+        $segments = ['not' => [[ 'or' => ['mobileUsers', 'desktopUsers'] ]]];
+        self::assertFalse($datafileReader->allSegmentsAreMatched($segments, ['deviceType' => 'mobile']));
+        self::assertTrue($datafileReader->allSegmentsAreMatched($segments, ['deviceType' => 'tv']));
+        self::assertFalse($datafileReader->allSegmentsAreMatched(['not' => []], []));
     }
 }

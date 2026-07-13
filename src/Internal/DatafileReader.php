@@ -1,7 +1,8 @@
 <?php
 
-namespace Featurevisor;
+namespace Featurevisor\Internal;
 
+use Featurevisor\Conditions;
 use Exception;
 use InvalidArgumentException;
 use JsonException;
@@ -13,12 +14,14 @@ class DatafileReader
     private const EMPTY_CONTENT = [
         'schemaVersion' => '2',
         'revision' => 'unknown',
+        'featurevisorVersion' => null,
         'segments' => [],
         'features' => []
     ];
 
     private string $schemaVersion;
     private string $revision;
+    private ?string $featurevisorVersion;
     private array $segments;
     private array $features;
     private LoggerInterface $logger;
@@ -75,10 +78,11 @@ class DatafileReader
     {
         $this->logger = $logger ?? new NullLogger();
 
-        $this->schemaVersion = $datafileContent['schemaVersion'];
-        $this->revision = $datafileContent['revision'];
-        $this->segments = $datafileContent['segments'];
-        $this->features = $datafileContent['features'];
+        $this->schemaVersion = $datafileContent['schemaVersion'] ?? '2';
+        $this->revision = $datafileContent['revision'] ?? 'unknown';
+        $this->featurevisorVersion = $datafileContent['featurevisorVersion'] ?? null;
+        $this->segments = $datafileContent['segments'] ?? [];
+        $this->features = $datafileContent['features'] ?? [];
         $this->regexCache = [];
     }
 
@@ -90,6 +94,28 @@ class DatafileReader
     public function getSchemaVersion(): string
     {
         return $this->schemaVersion;
+    }
+
+    public function getFeaturevisorVersion(): ?string
+    {
+        return $this->featurevisorVersion;
+    }
+
+    public function getDatafile(): array
+    {
+        $datafile = [
+            'schemaVersion' => $this->schemaVersion,
+            'revision' => $this->revision,
+            'featurevisorVersion' => $this->featurevisorVersion,
+            'segments' => $this->segments,
+            'features' => $this->features,
+        ];
+
+        if ($datafile['featurevisorVersion'] === null) {
+            unset($datafile['featurevisorVersion']);
+        }
+
+        return $datafile;
     }
 
     public function getSegment(string $segmentKey): ?array
@@ -255,12 +281,9 @@ class DatafileReader
                 return false;
             }
             if (isset($groupSegments['not']) && is_array($groupSegments['not'])) {
-                foreach ($groupSegments['not'] as $subSegment) {
-                    if ($this->allSegmentsAreMatched($subSegment, $context)) {
-                        return false;
-                    }
-                }
-                return true;
+                return $this->allSegmentsAreMatched([
+                    'and' => $groupSegments['not'],
+                ], $context) === false;
             }
             // If it's a plain array, treat as AND (all must match)
             if (array_keys($groupSegments) === range(0, count($groupSegments) - 1)) {

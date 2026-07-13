@@ -7,9 +7,9 @@ use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Psr\Log\LogLevel;
-use Stringable;
 
-class Logger implements LoggerInterface
+/** @internal SDK infrastructure. Use diagnostics through Featurevisor instead. */
+final class Logger implements LoggerInterface
 {
     use LoggerTrait;
     private const MSG_PREFIX = '[Featurevisor]';
@@ -52,6 +52,7 @@ class Logger implements LoggerInterface
 
     public function setLevel(string $level): void
     {
+        $level = self::normalizeLevel($level);
         if (!in_array($level, self::ALL_LEVELS, true)) {
             throw new InvalidArgumentException('Invalid log level');
         }
@@ -59,9 +60,14 @@ class Logger implements LoggerInterface
         $this->level = $level;
     }
 
+    public function getLevel(): string
+    {
+        return $this->level;
+    }
+
     public function log($level, $message, array $context = []): void
     {
-        $level = (string) $level;
+        $level = self::normalizeLevel((string) $level);
 
         if (!in_array($level, self::ALL_LEVELS, true)) {
             throw new InvalidArgumentException('Invalid log level');
@@ -74,6 +80,17 @@ class Logger implements LoggerInterface
         }
 
         ($this->handler)($level, self::MSG_PREFIX.' '.$message, $context);
+    }
+
+    private static function normalizeLevel(string $level): string
+    {
+        if ($level === 'fatal') {
+            return LogLevel::EMERGENCY;
+        }
+        if ($level === 'warn') {
+            return LogLevel::WARNING;
+        }
+        return $level;
     }
 
     private static function defaultLogHandler($level, $message, ?array $details = null): void

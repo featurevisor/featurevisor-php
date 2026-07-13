@@ -9,9 +9,14 @@ use Psr\Log\LogLevel;
 
 class FeaturevisorTest extends TestCase
 {
+    public function testLegacyFactoryIsAbsent()
+    {
+        self::assertFalse(method_exists(Featurevisor::class, 'createInstance'));
+    }
+
     public function testShouldCreateInstanceWithDatafileContent()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -21,19 +26,43 @@ class FeaturevisorTest extends TestCase
         ]);
 
         self::assertTrue(method_exists($sdk, 'getVariation'));
+        self::assertSame('2', $sdk->getSchemaVersion());
+        self::assertSame([], $sdk->getFeatureKeys());
+    }
+
+    public function testShouldReportLifecycleMutationDiagnostics()
+    {
+        $diagnostics = [];
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::DEBUG,
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+        ]);
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => '1',
+            'segments' => [],
+            'features' => [],
+        ]);
+        $sdk->setSticky(['test' => ['enabled' => true]]);
+        $sdk->setContext(['country' => 'nl']);
+
+        $codes = array_column($diagnostics, 'code');
+        self::assertContains('datafile_set', $codes);
+        self::assertContains('sticky_set', $codes);
+        self::assertContains('context_set', $codes);
     }
 
     public function testShouldCreateInstanceWithLogLevel()
     {
-        $logs = [];
-        $sdk = Featurevisor::createInstance([
+        $diagnostics = [];
+        $sdk = Featurevisor::createFeaturevisor([
             'logLevel' => LogLevel::DEBUG,
-            'logger' => Logger::create([
-                'level' => LogLevel::ERROR,
-                'handler' => function ($level, $message, $context) use (&$logs) {
-                    $logs[] = compact('level', 'message', 'context');
-                },
-            ]),
+            'onDiagnostic' => function (array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -44,20 +73,17 @@ class FeaturevisorTest extends TestCase
 
         $sdk->setContext(['userId' => '123']);
 
-        // logger option should take precedence over logLevel option
-        self::assertCount(0, $logs);
+        self::assertContains('context_set', array_column($diagnostics, 'code'));
     }
 
     public function testShouldSetLogLevelAfterInitialization()
     {
-        $logs = [];
-        $sdk = Featurevisor::createInstance([
-            'logger' => Logger::create([
-                'level' => LogLevel::ERROR,
-                'handler' => function ($level, $message, $context) use (&$logs) {
-                    $logs[] = compact('level', 'message', 'context');
-                },
-            ]),
+        $diagnostics = [];
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'onDiagnostic' => function (array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -67,19 +93,18 @@ class FeaturevisorTest extends TestCase
         ]);
 
         $sdk->setContext(['userId' => '123']);
-        self::assertCount(0, $logs);
+        self::assertNotContains('context_set', array_column($diagnostics, 'code'));
 
         $sdk->setLogLevel(LogLevel::DEBUG);
         $sdk->setContext(['country' => 'nl']);
-        self::assertCount(1, $logs);
-        self::assertSame('debug', $logs[0]['level']);
+        self::assertContains('context_set', array_column($diagnostics, 'code'));
     }
 
     public function testShouldConfigurePlainBucketBy()
     {
         $capturedBucketKey = '';
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -103,7 +128,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -128,7 +153,7 @@ class FeaturevisorTest extends TestCase
     {
         $capturedBucketKey = '';
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -152,7 +177,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -177,7 +202,7 @@ class FeaturevisorTest extends TestCase
     {
         $capturedBucketKey = '';
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -201,7 +226,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketKey' => function($options) use (&$capturedBucketKey) {
@@ -228,13 +253,13 @@ class FeaturevisorTest extends TestCase
         self::assertEquals('456.test', $capturedBucketKey);
     }
 
-    public function testShouldInterceptContextBeforeHook()
+    public function testShouldInterceptContextBeforeModule()
     {
         $intercepted = false;
         $interceptedFeatureKey = '';
         $interceptedVariableKey = '';
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -258,7 +283,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'before' => function($options) use (&$intercepted, &$interceptedFeatureKey, &$interceptedVariableKey) {
@@ -281,13 +306,13 @@ class FeaturevisorTest extends TestCase
         self::assertEquals('', $interceptedVariableKey);
     }
 
-    public function testShouldInterceptValueAfterHook()
+    public function testShouldInterceptValueAfterModule()
     {
         $intercepted = false;
         $interceptedFeatureKey = '';
         $interceptedVariableKey = '';
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -311,7 +336,7 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'hooks' => [
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'after' => function($options) use (&$intercepted, &$interceptedFeatureKey, &$interceptedVariableKey) {
@@ -361,7 +386,7 @@ class FeaturevisorTest extends TestCase
             'segments' => [],
         ];
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'sticky' => [
                 'test' => [
                     'enabled' => true,
@@ -397,7 +422,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldHonourSimpleRequiredFeatures()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -436,7 +461,7 @@ class FeaturevisorTest extends TestCase
         self::assertFalse($sdk->isEnabled('myKey'));
 
         // enabling required should enable the feature too
-        $sdk2 = Featurevisor::createInstance([
+        $sdk2 = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -476,7 +501,7 @@ class FeaturevisorTest extends TestCase
     public function testShouldHonourRequiredFeaturesWithVariation()
     {
         // should be disabled because required has different variation
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -523,7 +548,7 @@ class FeaturevisorTest extends TestCase
         self::assertFalse($sdk->isEnabled('myKey'));
 
         // child should be enabled because required has desired variation
-        $sdk2 = Featurevisor::createInstance([
+        $sdk2 = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -573,7 +598,7 @@ class FeaturevisorTest extends TestCase
     {
         $deprecatedCount = 0;
 
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -614,13 +639,11 @@ class FeaturevisorTest extends TestCase
                 ],
                 'segments' => [],
             ],
-            'logger' => Logger::create([
-                'handler' => function($level, $message) use (&$deprecatedCount) {
-                    if ($level === LogLevel::WARNING && strpos($message, 'is deprecated') !== false) {
+            'onDiagnostic' => function(array $diagnostic) use (&$deprecatedCount) {
+                    if ($diagnostic['code'] === 'deprecated_feature') {
                         $deprecatedCount += 1;
                     }
                 },
-            ]),
         ]);
 
         $testVariation = $sdk->getVariation('test', [
@@ -637,7 +660,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldCheckIfEnabledForOverriddenFlagsFromRules()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -685,8 +708,8 @@ class FeaturevisorTest extends TestCase
     {
         $bucketValue = 10000;
 
-        $sdk = Featurevisor::createInstance([
-            'hooks' => [
+        $sdk = Featurevisor::createFeaturevisor([
+            'modules' => [
                 [
                     'name' => 'unit-test',
                     'bucketValue' => function() use (&$bucketValue) {
@@ -721,7 +744,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldGetVariation()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -801,7 +824,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldGetVariable()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1088,7 +1111,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldGetVariablesWithoutAnyVariations()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1150,7 +1173,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldApplyRuleVariableOverridesOnTopOfRuleVariables()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1285,7 +1308,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldCheckIfEnabledForIndividuallyNamedSegments()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1350,7 +1373,7 @@ class FeaturevisorTest extends TestCase
 
     public function testShouldGetArrayAndObjectVariables()
     {
-        $sdk = Featurevisor::createInstance([
+        $sdk = Featurevisor::createFeaturevisor([
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => '1.0',
@@ -1480,5 +1503,248 @@ class FeaturevisorTest extends TestCase
             ],
             $all['withObject']['variables']['themeConfig']
         );
+    }
+
+    public function testShouldSetDatafileByMergingByDefaultAndReplacingWhenRequested()
+    {
+        $events = [];
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'datafile' => [
+                'schemaVersion' => '2',
+                'revision' => 'base',
+                'segments' => [],
+                'features' => [
+                    'first' => [
+                        'key' => 'first',
+                        'bucketBy' => 'userId',
+                        'traffic' => [
+                            [
+                                'key' => '1',
+                                'segments' => '*',
+                                'percentage' => 100000,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $sdk->on('datafile_set', function(array $details) use (&$events) {
+            $events[] = $details;
+        });
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => 'merged',
+            'segments' => [],
+            'features' => [
+                'second' => [
+                    'key' => 'second',
+                    'bucketBy' => 'userId',
+                    'traffic' => [
+                        [
+                            'key' => '1',
+                            'segments' => '*',
+                            'percentage' => 100000,
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertTrue($sdk->isEnabled('first', ['userId' => '123']));
+        self::assertTrue($sdk->isEnabled('second', ['userId' => '123']));
+        self::assertFalse($events[0]['replaced']);
+
+        $sdk->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => 'replaced',
+            'segments' => [],
+            'features' => [
+                'third' => [
+                    'key' => 'third',
+                    'bucketBy' => 'userId',
+                    'traffic' => [
+                        [
+                            'key' => '1',
+                            'segments' => '*',
+                            'percentage' => 100000,
+                        ],
+                    ],
+                ],
+            ],
+        ], true);
+
+        self::assertFalse($sdk->isEnabled('first', ['userId' => '123']));
+        self::assertTrue($sdk->isEnabled('third', ['userId' => '123']));
+        self::assertTrue($events[1]['replaced']);
+    }
+
+    public function testShouldManageModulesAndDuplicateDiagnostics()
+    {
+        $diagnostics = [];
+        $setupCalls = 0;
+        $closeCalls = 0;
+
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+            'modules' => [
+                [
+                    'name' => 'module-a',
+                    'setup' => function(array $api) use (&$setupCalls) {
+                        $setupCalls++;
+                        self::assertSame('unknown', $api['getRevision']());
+                    },
+                    'close' => function() use (&$closeCalls) {
+                        $closeCalls++;
+                    },
+                ],
+            ],
+        ]);
+
+        $removeModule = $sdk->addModule([
+            'name' => 'module-b',
+            'close' => function() use (&$closeCalls) {
+                $closeCalls++;
+            },
+        ]);
+        $duplicate = $sdk->addModule(['name' => 'module-b']);
+
+        self::assertSame(1, $setupCalls);
+        self::assertNull($duplicate);
+        self::assertSame('duplicate_module', $diagnostics[0]['code']);
+
+        $removeModule();
+        $sdk->addModule([
+            'name' => 'module-c',
+            'close' => function() use (&$closeCalls) {
+                $closeCalls++;
+            },
+        ]);
+        $sdk->removeModule('module-c');
+        $sdk->close();
+
+        self::assertSame(3, $closeCalls);
+    }
+
+    public function testShouldReportModuleCloseErrorsAndContinueCleanup()
+    {
+        $diagnostics = [];
+        $errors = [];
+        $closed = [];
+
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+            'modules' => [
+                [
+                    'name' => 'first',
+                    'close' => function() use (&$closed) {
+                        $closed[] = 'first';
+                        throw new \RuntimeException('first close failed');
+                    },
+                ],
+                [
+                    'name' => 'second',
+                    'close' => function() use (&$closed) {
+                        $closed[] = 'second';
+                    },
+                ],
+            ],
+        ]);
+        $sdk->on('error', function(array $event) use (&$errors) {
+            $errors[] = $event;
+        });
+
+        $sdk->close();
+
+        self::assertSame(['first', 'second'], $closed);
+        self::assertTrue(count(array_filter($diagnostics, fn($diagnostic) =>
+            ($diagnostic['code'] ?? null) === 'module_close_error'
+            && ($diagnostic['moduleName'] ?? null) === 'first'
+            && ($diagnostic['level'] ?? null) === 'error'
+            && ($diagnostic['originalError'] ?? null) instanceof \RuntimeException
+        )) > 0);
+        self::assertTrue(count(array_filter($errors, fn($event) =>
+            ($event['diagnostic']['code'] ?? null) === 'module_close_error'
+            && ($event['diagnostic']['moduleName'] ?? null) === 'first'
+        )) > 0);
+    }
+
+    public function testShouldReportModuleCloseErrorsFromUnsubscribeOnce()
+    {
+        $diagnostics = [];
+
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
+                $diagnostics[] = $diagnostic;
+            },
+        ]);
+
+        $removeModule = $sdk->addModule([
+            'name' => 'dynamic',
+            'close' => function() {
+                throw new \RuntimeException('dynamic close failed');
+            },
+        ]);
+
+        $removeModule();
+        $removeModule();
+
+        self::assertSame(1, count(array_filter($diagnostics, fn($diagnostic) =>
+            ($diagnostic['code'] ?? null) === 'module_close_error'
+            && ($diagnostic['moduleName'] ?? null) === 'dynamic'
+        )));
+    }
+
+    public function testShouldSupportModuleDiagnosticsSubscriptions()
+    {
+        $received = [];
+        $reporter = null;
+
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => LogLevel::ERROR,
+            'modules' => [
+                [
+                    'name' => 'listener',
+                    'setup' => function(array $api) use (&$received) {
+                        $api['onDiagnostic'](function(array $diagnostic) use (&$received) {
+                            $received[] = $diagnostic;
+                        }, ['logLevel' => 'warn']);
+                    },
+                ],
+                [
+                    'name' => 'reporter',
+                    'setup' => function(array $api) use (&$reporter) {
+                        $reporter = $api['reportDiagnostic'];
+                    },
+                ],
+            ],
+        ]);
+
+        $reporter([
+            'level' => 'warn',
+            'code' => 'from_reporter',
+            'message' => 'diagnostic from reporter',
+        ]);
+
+        self::assertCount(1, $received);
+        self::assertSame('from_reporter', $received[0]['code']);
+        self::assertSame('reporter', $received[0]['module']);
+
+        $sdk->removeModule('listener');
+        $reporter([
+            'level' => 'warn',
+            'code' => 'after_remove',
+            'message' => 'after remove',
+        ]);
+
+        self::assertCount(1, $received);
     }
 }

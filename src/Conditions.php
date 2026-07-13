@@ -83,10 +83,10 @@ class Conditions
             return false;
         }
         if (isset($condition['not'])) {
-            $notConditions = self::isSequentialArray($condition['not']) ? $condition['not'] : [$condition['not']];
-            if (count($notConditions) === 0) {
-                return true;
+            if (is_array($condition['not']) && count($condition['not']) === 0) {
+                return false;
             }
+            $notConditions = self::isSequentialArray($condition['not']) ? $condition['not'] : [$condition['not']];
             // JS SDK semantics: "not" negates the entire AND group.
             return !self::conditionIsMatched(['and' => $notConditions], $context, $getRegex);
         }

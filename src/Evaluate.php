@@ -4,19 +4,13 @@ namespace Featurevisor;
 
 class Evaluate
 {
-    public static function evaluateWithHooks(array $opts): array
+    public static function evaluateWithModules(array $opts): array
     {
         try {
-            $hooksManager = $opts['hooksManager'];
-            $hooks = $hooksManager->getAll();
+            $modulesManager = $opts['modulesManager'];
 
-            // run before hooks
-            $options = $opts;
-            foreach ($hooksManager->getAll() as $hook) {
-                if (isset($hook['before'])) {
-                    $options = $hook['before']($options);
-                }
-            }
+            // run before modules
+            $options = $modulesManager->runBeforeModules($opts);
 
             // evaluate
             $evaluation = self::evaluate($options);
@@ -39,12 +33,8 @@ class Evaluate
                 $evaluation['variableValue'] = $options['defaultVariableValue'];
             }
 
-            // run after hooks
-            foreach ($hooks as $hook) {
-                if (isset($hook['after'])) {
-                    $evaluation = $hook['after']($evaluation, $options);
-                }
-            }
+            // run after modules
+            $evaluation = $modulesManager->runAfterModules($evaluation, $options);
 
             return $evaluation;
         } catch (\Exception $e) {

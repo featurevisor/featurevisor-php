@@ -1,12 +1,13 @@
 # Featurevisor PHP SDK <!-- omit in toc -->
 
-This is a port of Featurevisor [Javascript SDK](https://featurevisor.com/docs/sdks/javascript/) v2.x to PHP, providing a way to evaluate feature flags, variations, and variables in your PHP applications.
+This is a port of Featurevisor [Javascript SDK](https://featurevisor.com/docs/sdks/javascript/) v3.x to PHP, providing a way to evaluate feature flags, variations, and variables in your PHP applications.
 
-This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 projects and above.
+This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 projects and v2 datafiles.
 
 ## Table of contents <!-- omit in toc -->
 
 - [Installation](#installation)
+- [Public API](#public-api)
 - [Initialization](#initialization)
 - [Evaluation types](#evaluation-types)
 - [Context](#context)
@@ -23,19 +24,22 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v2.0 proje
   - [Initialize with sticky](#initialize-with-sticky)
   - [Set sticky afterwards](#set-sticky-afterwards)
 - [Setting datafile](#setting-datafile)
+  - [Merging by default](#merging-by-default)
+  - [Replacing](#replacing)
+  - [Loading datafiles on demand](#loading-datafiles-on-demand)
   - [Updating datafile](#updating-datafile)
-- [Logging](#logging)
+- [Evaluation details](#evaluation-details)
+- [Diagnostics](#diagnostics)
   - [Levels](#levels)
-  - [Customizing levels](#customizing-levels)
   - [Handler](#handler)
 - [Events](#events)
   - [`datafile_set`](#datafile_set)
   - [`context_set`](#context_set)
   - [`sticky_set`](#sticky_set)
-- [Evaluation details](#evaluation-details)
-- [Hooks](#hooks)
-  - [Defining a hook](#defining-a-hook)
-  - [Registering hooks](#registering-hooks)
+  - [`error`](#error)
+- [Modules](#modules)
+  - [Defining a module](#defining-a-module)
+  - [Registering modules](#registering-modules)
 - [Child instance](#child-instance)
 - [Close](#close)
 - [CLI usage](#cli-usage)
@@ -58,6 +62,20 @@ In your PHP application, install the SDK using [Composer](https://getcomposer.or
 $ composer require featurevisor/featurevisor-php
 ```
 
+## Public API
+
+The main runtime API is `Featurevisor::createFeaturevisor()`:
+
+```php
+use Featurevisor\Featurevisor;
+
+$f = Featurevisor::createFeaturevisor([
+  "datafile" => $datafileContent,
+]);
+```
+
+Most applications only need this factory and the returned `Featurevisor` instance. Public extension and observability APIs include modules, diagnostics, events, and the datafile arrays accepted by the factory.
+
 ## Initialization
 
 The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/building-datafiles/) content directly:
@@ -72,7 +90,7 @@ $datafileUrl = "https://cdn.yoursite.com/datafile.json";
 $datafileContent = file_get_contents($datafileUrl);
 $datafileContent = json_decode($datafileContent, true);
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "datafile" => $datafileContent
 ]);
 ```
@@ -112,7 +130,7 @@ You can set context at the time of initialization:
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "context" => [
     "deviceId" => "123",
     "country" => "nl",
@@ -248,6 +266,8 @@ $f->getVariableObject($featureKey, $variableKey, $context = []);
 $f->getVariableJSON($featureKey, $variableKey, $context = []);
 ```
 
+Type specific methods do not coerce values. `getVariableInteger()` returns `null` for the string `"1"`, and boolean getters return `null` for non-boolean values.
+
 ## Getting all evaluations
 
 You can get evaluations of all features available in the SDK instance:
@@ -278,12 +298,14 @@ This is handy especially when you want to pass all evaluations from a backend ap
 
 For the lifecycle of the SDK instance in your application, you can set some features with sticky values, meaning that they will not be evaluated against the fetched [datafile](https://featurevisor.com/docs/building-datafiles/):
 
+Sticky values belong to an SDK or child instance. Evaluation options do not accept sticky overrides; use `spawn($context, ['sticky' => ...])` when a child needs its own sticky state.
+
 ### Initialize with sticky
 
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "sticky" => [
     "myFeatureKey" => [
       "enabled" => true,
@@ -336,6 +358,47 @@ You may also initialize the SDK without passing `datafile`, and set it later on:
 $f->setDatafile($datafileContent);
 ```
 
+### Merging by default
+
+By default, `setDatafile($datafileContent)` merges the incoming datafile with the SDK instance's existing datafile:
+
+- incoming `features` and `segments` override matching keys
+- existing `features` and `segments` that are missing from the incoming datafile are kept
+- `revision`, `schemaVersion`, and `featurevisorVersion` are taken from the incoming datafile
+
+This means you can call `setDatafile` more than once with different datafiles, and the SDK instance accumulates their features and segments together.
+
+### Replacing
+
+To replace the stored datafile completely, pass `true` as the second argument:
+
+```php
+$f->setDatafile($datafileContent, true);
+```
+
+### Loading datafiles on demand
+
+Because merging is the default, a single SDK instance can start with a small datafile and load more datafiles later as your application needs them, instead of downloading every feature upfront.
+
+This pairs well with [targets](https://featurevisor.com/docs/targets/), where each target produces a smaller datafile for a specific part of your application:
+
+```php
+$f = Featurevisor::createFeaturevisor([]);
+
+function loadDatafile($f, string $target): void {
+  $url = "https://cdn.yoursite.com/production/featurevisor-$target.json";
+  $datafile = json_decode(file_get_contents($url), true);
+
+  // merges into whatever was loaded before
+  $f->setDatafile($datafile);
+}
+
+loadDatafile($f, 'products');
+
+// later, when the user reaches checkout
+loadDatafile($f, 'checkout');
+```
+
 ### Updating datafile
 
 You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile_set) event that you can listen and react to accordingly.
@@ -347,71 +410,41 @@ The triggers for setting the datafile again can be:
   - a specific event in your application (like a user action), or
   - an event served via websocket or server-sent events (SSE)
 
-## Logging
+## Diagnostics
 
-By default, Featurevisor SDKs will print out logs to the console for `info` level and above.
-Featurevisor PHP-SDK by default uses [PSR-3 standard](https://www.php-fig.org/psr/psr-3/) simple implementation.
-You can also choose from many mature implementations like e.g. [Monolog](https://github.com/Seldaek/monolog)
+By default, Featurevisor reports diagnostics to the console for `info` level and above with a `[Featurevisor]` prefix.
 
 ### Levels
 
-These are all the available log levels:
+Available diagnostic levels are `fatal`, `error`, `warn`, `info`, and `debug`.
 
-- `error`
-- `warning`
-- `info`
-- `debug`
-
-### Customizing levels
-
-If you choose `debug` level to make the logs more verbose, you can set it at the time of SDK initialization.
-
-Setting `debug` level will print out all logs, including `info`, `warning`, and `error` levels.
+Set the level during initialization or update it afterwards:
 
 ```php
-use Featurevisor\Featurevisor;
-use Featurevisor\Logger;
-
-$f = Featurevisor::createInstance([
-  "logger" => Logger::create([
-    "level" => "debug",
-  ]),
-]);
-```
-
-Alternatively, you can also set `logLevel` directly:
-
-```php
-$f = Featurevisor::createInstance([
+$f = Featurevisor::createFeaturevisor([
   "logLevel" => "debug",
 ]);
-```
 
-You can also set log level from SDK instance afterwards:
-
-```php
-$f->setLogLevel("debug");
+$f->setLogLevel("info");
 ```
 
 ### Handler
 
-You can also pass your own log handler, if you do not wish to print the logs to the console:
+Use `onDiagnostic` to send structured diagnostics to your observability system:
 
 ```php
-use Featurevisor\Featurevisor;
-use Featurevisor\Logger;
-
-$f = Featurevisor::createInstance([
-  "logger" => Logger::create([
-    "level" => "info",
-    "handler" => function ($level, $message, $details) {
-      // do something with the log
-    },
-  ]),
+$f = Featurevisor::createFeaturevisor([
+  "logLevel" => "info",
+  "onDiagnostic" => function (array $diagnostic) {
+    // send $diagnostic to your observability system
+  },
 ]);
 ```
 
-Further log levels like `info` and `debug` will help you understand how the feature variations and variables are evaluated in the runtime against given context.
+Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` value. Optional `module`, `moduleName`, and `originalError` fields describe provenance. Evaluation metadata belongs in `details`.
+
+Diagnostic handlers are isolated from SDK behavior. An exception in a handler does not stop other handlers or evaluations.
+
 
 ## Events
 
@@ -426,6 +459,7 @@ $unsubscribe = $f->on('datafile_set', function ($event) {
   $revision = $event['revision']; // new revision
   $previousRevision = $event['previousRevision'];
   $revisionChanged = $event['revisionChanged']; // true if revision has changed
+  $replaced = $event['replaced']; // true if datafile was replaced instead of merged
 
   // list of feature keys that have new updates,
   // and you should re-evaluate them
@@ -468,6 +502,16 @@ $unsubscribe = $f->on('sticky_set', function ($event) {
 });
 ```
 
+### `error`
+
+```php
+$unsubscribe = $f->on('error', function ($event) {
+  echo $event['diagnostic']['message'];
+});
+```
+
+The `error` event is emitted for diagnostics whose level is `error`.
+
 ## Evaluation details
 
 Besides logging with debug level enabled, you can also get more details about how the feature variations and variables are evaluated in the runtime against given context:
@@ -500,20 +544,37 @@ And optionally these properties depending on whether you are evaluating a featur
 - `variableValue`: the variable value
 - `variableSchema`: the variable schema
 
-## Hooks
+## Modules
 
-Hooks allow you to intercept the evaluation process and customize it further as per your needs.
+Modules allow you to intercept the evaluation process, report diagnostics, and customize behavior further as per your needs.
 
-### Defining a hook
+### Defining a module
 
-A hook is a simple object with a unique required `name` and optional functions:
+A module is a simple object with a unique required `name` and optional functions:
+
+If `setup` throws, the module is not registered. Featurevisor removes subscriptions created during setup, reports `module_setup_error`, and calls `close` when present.
 
 ```php
-$myCustomHook = [
+$myCustomModule = [
   // only required property
-  'name' => 'my-custom-hook',
+  'name' => 'my-custom-module',
 
-  // rest of the properties below are all optional per hook
+  // rest of the properties below are all optional per module
+
+  // setup receives a module API
+  'setup' => function ($api) {
+    $revision = $api['getRevision']();
+
+    $unsubscribe = $api['onDiagnostic'](function (array $diagnostic) {
+      // observe diagnostics reported by other modules or the SDK
+    });
+
+    $api['reportDiagnostic']([
+      'level' => 'info',
+      'code' => 'custom_module_ready',
+      'message' => 'Custom module is ready',
+    ]);
+  },
 
   // before evaluation
   'before' => function ($options) {
@@ -562,19 +623,24 @@ $myCustomHook = [
     // return custom bucket value
     return $bucketValue;
   },
+
+  // cleanup
+  'close' => function () {
+    // release module resources
+  },
 ];
 ```
 
-### Registering hooks
+### Registering modules
 
-You can register hooks at the time of SDK initialization:
+You can register modules at the time of SDK initialization:
 
 ```php
 use Featurevisor\Featurevisor;
 
-$f = Featurevisor::createInstance([
-  'hooks' => [
-    $myCustomHook
+$f = Featurevisor::createFeaturevisor([
+  'modules' => [
+    $myCustomModule
   ],
 ]);
 ```
@@ -582,9 +648,12 @@ $f = Featurevisor::createInstance([
 Or after initialization:
 
 ```php
-$removeHook = $f->addHook($myCustomHook);
+$removeModule = $f->addModule($myCustomModule);
 
-// $removeHook()
+// $removeModule()
+
+// or remove later by name
+$f->removeModule('my-custom-module');
 ```
 
 ## Child instance
@@ -630,7 +699,7 @@ Similar to parent SDK, child instances also support several additional methods:
 
 ## Close
 
-Both primary and child instances support a `.close()` method, that removes forgotten event listeners (via `on` method) and cleans up any potential memory leaks.
+Both primary and child instances support a `.close()` method. The primary instance also closes registered modules and removes diagnostic subscriptions.
 
 ```php
 $f->close();
@@ -639,6 +708,8 @@ $f->close();
 ## CLI usage
 
 This package also provides a CLI tool for running your Featurevisor project's test specs and benchmarking against this PHP SDK:
+
+All three commands accept repeatable `--target=<target>` options. `test` builds only the selected Target datafiles and runs untargeted assertions plus assertions for those targets. `benchmark` and `assess-distribution` run independently against every selected Target datafile. Without `--target`, existing project-wide behavior is preserved. Project definitions, test specs, Target discovery, and datafile generation continue to come from the Node.js CLI.
 
 ### Test
 
@@ -656,12 +727,10 @@ $ vendor/bin/featurevisor test \
     --quiet|verbose \
     --onlyFailures \
     --keyPattern="myFeatureKey" \
-    --assertionPattern="#1" \
-    --with-tags \
-    --with-scopes
+    --assertionPattern="#1"
 ```
 
-If your assertions include `scope`, run tests with `--with-scopes` to evaluate against scoped datafiles generated on the fly via `npx featurevisor build --scope=<scopeName> --environment=<env> --json`.
+If assertions include `target`, the runner builds and selects the corresponding Target datafile automatically via `npx featurevisor build --target=<target> --environment=<env> --json`.
 
 ### Benchmark
 
@@ -708,6 +777,12 @@ $ composer install
 
 ```
 $ composer test
+```
+
+To run the SDK against Featurevisor example-1 from the local monorepo checkout:
+
+```
+$ make test-example-1
 ```
 
 ### Releasing

@@ -1,4 +1,4 @@
-.PHONY: install test setup-monorepo update-monorepo test-example-project
+.PHONY: install test setup-monorepo update-monorepo test-example-1 test-example-project
 
 install:
 	composer install
@@ -18,5 +18,8 @@ setup-monorepo:
 update-monorepo:
 	(cd monorepo && git pull origin main)
 
-test-example-project:
-	./featurevisor test --projectDirectoryPath="./monorepo/examples/example-1"
+test-example-1:
+	composer test
+	./featurevisor test --projectDirectoryPath="../featurevisor/examples/example-1" --onlyFailures
+
+test-example-project: test-example-1

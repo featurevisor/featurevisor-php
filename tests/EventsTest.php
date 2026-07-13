@@ -6,7 +6,7 @@ use Featurevisor\Logger;
 use PHPUnit\Framework\TestCase;
 
 use Featurevisor\Events;
-use Featurevisor\DatafileReader;
+use Featurevisor\Internal\DatafileReader;
 
 class EventsTest extends TestCase
 {
@@ -83,6 +83,7 @@ class EventsTest extends TestCase
             'previousRevision' => '1',
             'revisionChanged' => true,
             'features' => ['feature1', 'feature2'],
+            'replaced' => false,
         ], $result);
     }
 
@@ -126,6 +127,7 @@ class EventsTest extends TestCase
             'previousRevision' => '1',
             'revisionChanged' => true,
             'features' => ['feature2', 'feature3'],
+            'replaced' => false,
         ], $result);
     }
 
@@ -167,6 +169,7 @@ class EventsTest extends TestCase
             'previousRevision' => '1',
             'revisionChanged' => true,
             'features' => ['feature1', 'feature2'],
+            'replaced' => false,
         ], $result);
     }
 }
