@@ -42,6 +42,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
   - [Registering modules](#registering-modules)
 - [Child instance](#child-instance)
 - [Close](#close)
+- [OpenFeature](#openfeature)
 - [CLI usage](#cli-usage)
   - [Test](#test)
   - [Benchmark](#benchmark)
@@ -760,6 +761,44 @@ $ vendor/bin/featurevisor assess-distribution \
     --populateUuid=deviceId \
     --n=1000
 ```
+
+## OpenFeature
+
+The provider requires PHP 8 and the official OpenFeature SDK:
+
+```bash
+composer require featurevisor/featurevisor-php open-feature/sdk
+```
+
+```php
+use Featurevisor\OpenFeatureProvider;
+use OpenFeature\OpenFeatureAPI;
+
+$provider = new OpenFeatureProvider([
+    'datafile' => $datafileContent,
+]);
+
+$api = OpenFeatureAPI::getInstance();
+$api->setProvider($provider);
+
+$client = $api->getClient();
+$enabled = $client->getBooleanValue('checkout', false);
+```
+
+Use `checkout` for a flag, `checkout:variation` for its variation, and `checkout:title` for its `title` variable. Boolean variables use the boolean resolver. Arrays and JSON variables use the object resolver.
+
+OpenFeature's targeting key maps to `userId` by default. Constructor arguments can customize the targeting key field, key separator, and reserved variation key. The current OpenFeature PHP provider interface does not expose flag metadata or provider shutdown. The adapter still provides `shutdown()` for applications that own its lifecycle.
+
+You can also reuse an existing Featurevisor instance:
+
+```php
+$featurevisor = Featurevisor::createFeaturevisor(['datafile' => $datafileContent]);
+$provider = new OpenFeatureProvider(featurevisor: $featurevisor);
+```
+
+The caller owns an instance passed this way. Calling `$provider->shutdown()` does not close it. Call `$featurevisor->close()` when every consumer is finished with it. When the provider creates the instance from options, the provider owns and closes it. If both are supplied, `$featurevisor` takes precedence over `$options`.
+
+See the [OpenFeature provider guide](https://featurevisor.com/docs/sdks/openfeature/) for resolution reasons, errors, lifecycle, and providers for other languages.
 
 <!-- FEATUREVISOR_DOCS_END -->
 
