@@ -96,7 +96,7 @@ final class OpenFeatureProviderTest extends TestCase
     {
         $api = OpenFeatureAPI::getInstance();
         $api->setProvider(new OpenFeatureProvider(['datafile' => $this->datafile(), 'logLevel' => 'fatal']));
-        self::assertTrue($api->getClient()->getBooleanValue(
+        self::assertTrue($api->getClient(null, null)->getBooleanValue(
             'checkout',
             false,
             new EvaluationContext('forced-user', new Attributes())
@@ -105,22 +105,29 @@ final class OpenFeatureProviderTest extends TestCase
 
     public function testBorrowsExistingFeaturevisor(): void
     {
-        $closed = false;
+        $lifecycle = new class {
+            public bool $closed = false;
+
+            public function close(): void
+            {
+                $this->closed = true;
+            }
+        };
         $featurevisor = Featurevisor::createFeaturevisor([
             'datafile' => $this->datafile(),
             'logLevel' => 'fatal',
             'modules' => [[
                 'name' => 'owner',
-                'close' => function () use (&$closed): void { $closed = true; },
+                'close' => [$lifecycle, 'close'],
             ]],
         ]);
         $provider = new OpenFeatureProvider(featurevisor: $featurevisor);
 
         self::assertSame($featurevisor, $provider->getFeaturevisor());
         $provider->shutdown();
-        self::assertFalse($closed);
+        self::assertFalse($lifecycle->closed);
 
         $featurevisor->close();
-        self::assertTrue($closed);
+        self::assertTrue($lifecycle->closed);
     }
 }

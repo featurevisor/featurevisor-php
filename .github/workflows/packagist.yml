@@ -5,22 +5,28 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: packagist-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ci:
     name: Notify Packagist
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Notify
+      - name: Notify Packagist
         shell: bash
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
         run: |
-          echo "Notifying Packagist of new release: ${{ github.event.release.tag_name }}"
+          echo "Notifying Packagist of new release: ${{ github.ref_name }}"
 
-          curl -X POST -H 'content-type:application/json' \
+          curl --fail-with-body --silent --show-error --request POST \
+            --header 'content-type: application/json' \
             "https://packagist.org/api/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_API_TOKEN" \
-            -d '{"repository":{"url":"https://packagist.org/packages/featurevisor/featurevisor-php"}}'
+            --data '{"repository":{"url":"https://packagist.org/packages/featurevisor/featurevisor-php"}}'

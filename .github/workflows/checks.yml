@@ -3,14 +3,15 @@ name: Checks
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
-    types:
-      - opened
-      - synchronize # when a PR is updated
-      - reopened # when a PR is reopened
-      - ready_for_review # when a PR is ready for review
-      - review_requested # when a PR is requested for review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
@@ -18,34 +19,41 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v6
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          # extensions: mbstring, intl, dom
           coverage: none
+          tools: composer:v2
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
+      - name: Validate Composer configuration
+        run: composer validate --strict
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: SAST
+      - name: Static analysis
         run: composer sast
 
-      - name: Test
+      - name: Unit tests
         run: composer test
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          package-manager-cache: false
 
       - name: Setup Featurevisor example-1 project
         run: |
           mkdir example-1
-          (cd example-1 && npx @featurevisor/cli@2.x init --example=1)
+          (cd example-1 && npx --yes @featurevisor/cli@3 init --example=1)
           (cd example-1 && npm install)
-          (cd example-1 && npx featurevisor test)
+          (cd example-1 && npx featurevisor build)
+          (cd example-1 && npx featurevisor test --onlyFailures)
 
       - name: Run Featurevisor project tests against PHP SDK
-        run: (cd ./example-1 && ../featurevisor test)
+        run: ./featurevisor test --projectDirectoryPath=./example-1 --onlyFailures
