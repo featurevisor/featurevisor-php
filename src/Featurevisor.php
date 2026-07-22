@@ -4,6 +4,7 @@ namespace Featurevisor;
 
 use Closure;
 use Featurevisor\Internal\DatafileReader;
+use Featurevisor\Internal\Logger;
 use Psr\Log\LogLevel;
 
 class Featurevisor

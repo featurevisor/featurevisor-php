@@ -3,7 +3,7 @@
 namespace Featurevisor\Tests;
 
 use Featurevisor\Featurevisor;
-use Featurevisor\Logger;
+use Featurevisor\Internal\Logger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
 

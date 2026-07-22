@@ -2,7 +2,7 @@
 
 namespace Featurevisor\Tests;
 
-use Featurevisor\Logger;
+use Featurevisor\Internal\Logger;
 use Featurevisor\Internal\DatafileReader;
 use PHPUnit\Framework\TestCase;
 

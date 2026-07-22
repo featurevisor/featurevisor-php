@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Featurevisor;
 
+use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use OpenFeature\implementation\provider\AbstractProvider;
 use OpenFeature\implementation\provider\ResolutionDetails;
 use OpenFeature\implementation\provider\ResolutionError;
@@ -28,6 +30,7 @@ final class OpenFeatureProvider extends AbstractProvider
     private $datafileUnsubscribe;
     private ?string $datafileError = null;
     private bool $ownsFeaturevisor;
+    private bool $closed = false;
 
     /**
      * @param array<string, mixed> $options Featurevisor options
@@ -82,6 +85,11 @@ final class OpenFeatureProvider extends AbstractProvider
 
     public function shutdown(): void
     {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->closed = true;
         ($this->datafileUnsubscribe)();
         if ($this->ownsFeaturevisor) {
             $this->featurevisor->close();
@@ -161,6 +169,8 @@ final class OpenFeatureProvider extends AbstractProvider
             $value = $defaultValue;
         } elseif (!$this->matches($value, $expectedType)) {
             return $this->typeMismatch($flagKey, $defaultValue, $expectedType);
+        } elseif ($expectedType === 'number' && is_int($value)) {
+            $value = (float) $value;
         }
 
         $details = new ResolutionDetails();
@@ -203,6 +213,7 @@ final class OpenFeatureProvider extends AbstractProvider
     private function errorMessage(array $evaluation): string
     {
         if (($evaluation['error'] ?? null) instanceof \Throwable) return $evaluation['error']->getMessage();
+        if (is_string($evaluation['error'] ?? null) && $evaluation['error'] !== '') return $evaluation['error'];
         if ($evaluation['reason'] === 'feature_not_found') return sprintf('Feature "%s" was not found', $evaluation['featureKey']);
         if ($evaluation['reason'] === 'variable_not_found') return sprintf('Variable "%s" was not found for feature "%s"', $evaluation['variableKey'] ?? '', $evaluation['featureKey']);
         if ($evaluation['reason'] === 'no_variations') return sprintf('Feature "%s" has no variations', $evaluation['featureKey']);
@@ -214,7 +225,7 @@ final class OpenFeatureProvider extends AbstractProvider
     {
         if ($expectedType === 'boolean') return is_bool($value);
         if ($expectedType === 'string') return is_string($value);
-        if ($expectedType === 'integer') return is_int($value) || (is_float($value) && floor($value) === $value);
+        if ($expectedType === 'integer') return is_int($value);
         if ($expectedType === 'number') return (is_int($value) || is_float($value)) && is_finite((float) $value);
         return is_array($value);
     }
@@ -222,7 +233,11 @@ final class OpenFeatureProvider extends AbstractProvider
     /** @param mixed $value @return mixed */
     private function normalize($value)
     {
-        if ($value instanceof DateTimeInterface) return $value->format(DATE_ATOM);
+        if ($value instanceof DateTimeInterface) {
+            return DateTimeImmutable::createFromInterface($value)
+                ->setTimezone(new DateTimeZone('UTC'))
+                ->format('Y-m-d\TH:i:s.v\Z');
+        }
         if (is_array($value)) return array_map(fn($item) => $this->normalize($item), $value);
         return $value;
     }

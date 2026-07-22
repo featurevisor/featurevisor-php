@@ -4,10 +4,10 @@ namespace Featurevisor\Tests;
 
 use PHPUnit\Framework\TestCase;
 
-use Featurevisor\Logger;
+use Featurevisor\Internal\Logger;
 use Psr\Log\LogLevel;
 
-class LoggerTest extends TestCase
+class InternalLoggerTest extends TestCase
 {
     private string $logBuffer;
 

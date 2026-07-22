@@ -1,9 +1,24 @@
-.PHONY: install test setup-monorepo update-monorepo test-example-1 test-example-project
+.PHONY: install sast test test-base test-openfeature check setup-monorepo update-monorepo test-example-1 test-example-project
 
 install:
 	composer install
 
 test:
+	composer test
+
+sast:
+	composer sast
+
+test-base:
+	vendor/bin/phpunit --exclude-group openfeature tests
+
+test-openfeature:
+	vendor/bin/phpunit --group openfeature tests
+
+check:
+	composer validate --strict
+	composer audit --locked --no-interaction
+	composer sast
 	composer test
 
 setup-monorepo:
@@ -20,6 +35,6 @@ update-monorepo:
 
 test-example-1:
 	composer test
-	./featurevisor test --projectDirectoryPath="../featurevisor/examples/example-1" --onlyFailures
+	./featurevisor test --projectDirectoryPath="../featurevisor/examples/example-1" --onlyFailures --quiet
 
 test-example-project: test-example-1

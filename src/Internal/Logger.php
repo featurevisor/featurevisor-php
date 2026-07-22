@@ -1,6 +1,6 @@
 <?php
 
-namespace Featurevisor;
+namespace Featurevisor\Internal;
 
 use Closure;
 use InvalidArgumentException;
@@ -8,7 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Psr\Log\LogLevel;
 
-/** @internal SDK infrastructure. Use diagnostics through Featurevisor instead. */
+/** @internal SDK infrastructure. Use Featurevisor diagnostics instead. */
 final class Logger implements LoggerInterface
 {
     use LoggerTrait;

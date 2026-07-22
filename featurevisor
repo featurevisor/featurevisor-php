@@ -5,7 +5,6 @@ require __DIR__ . '/vendor/autoload.php';
 
 use Featurevisor\Featurevisor;
 use Featurevisor\Internal\DatafileReader;
-use Featurevisor\Logger;
 use Psr\Log\LogLevel;
 
 /**
@@ -388,7 +387,7 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
     ];
 }
 
-function testSegment(array $assertion, array $segment, string $level): array {
+function testSegment(array $assertion, array $segment): array {
     $context = isset($assertion["context"]) ? $assertion["context"] : [];
     $conditions = $segment["conditions"];
 
@@ -401,9 +400,6 @@ function testSegment(array $assertion, array $segment, string $level): array {
 
     $datafileReader = DatafileReader::createFromOptions([
         'datafile' => $datafile,
-        'logger' => Logger::create([
-            'level' => $level,
-        ]),
     ]);
 
     $hasError = false;
@@ -481,9 +477,7 @@ function test(array $cliOptions) {
                 } else {
                     $f = Featurevisor::createFeaturevisor([
                         'datafile' => $datafile,
-                        'logger' => Logger::create([
-                          'level' => $level,
-                        ]),
+                        'logLevel' => $level,
                         'sticky' => $assertion['sticky'] ?? [],
                         'modules' => [
                             [
@@ -501,7 +495,7 @@ function test(array $cliOptions) {
                     $testResult = testFeature($assertion, $test["feature"], $f, $level);
                 }
             } else if (isset($test["segment"])) {
-                $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]], $level);
+                $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]]);
             }
 
             $testDuration += $testResult['duration'];
@@ -576,9 +570,7 @@ function benchmark(array $cliOptions) {
 
     $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
-        'logger' => Logger::create([
-          'level' => $level,
-        ]),
+        'logLevel' => $level,
     ]);
 
     $value = null;
@@ -661,9 +653,7 @@ function assessDistribution(array $cliOptions) {
 
     $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
-        'logger' => Logger::create([
-          'level' => $level,
-        ]),
+        'logLevel' => $level,
     ]);
 
     $value = null;

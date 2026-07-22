@@ -5,7 +5,7 @@ namespace Featurevisor\Tests;
 use DateTime;
 use Featurevisor\Conditions;
 use Featurevisor\Internal\DatafileReader;
-use Featurevisor\Logger;
+use Featurevisor\Internal\Logger;
 use PHPUnit\Framework\TestCase;
 
 class ConditionsTest extends TestCase {
