@@ -32,7 +32,7 @@ class CompareVersions
 
     private static function validateAndParse(string $version): array
     {
-        if (!preg_match(self::$semver, $version, $match)) {
+        if (!preg_match(self::$semver, $version, $match, PREG_UNMATCHED_AS_NULL)) {
             throw new \Exception("Invalid argument not valid semver ('$version' received)");
         }
 
@@ -52,8 +52,7 @@ class CompareVersions
 
     private static function tryParse(string $v)
     {
-        $n = intval($v);
-        return is_nan($n) ? $v : $n;
+        return preg_match('/^\d+$/', $v) ? intval($v) : $v;
     }
 
     private static function compareStrings(string $a, string $b): int

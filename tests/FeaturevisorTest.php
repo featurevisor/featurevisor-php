@@ -3,9 +3,7 @@
 namespace Featurevisor\Tests;
 
 use Featurevisor\Featurevisor;
-use Featurevisor\Internal\Logger;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LogLevel;
 
 class FeaturevisorTest extends TestCase
 {
@@ -34,7 +32,7 @@ class FeaturevisorTest extends TestCase
     {
         $diagnostics = [];
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::DEBUG,
+            'logLevel' => 'debug',
             'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -59,7 +57,7 @@ class FeaturevisorTest extends TestCase
     {
         $diagnostics = [];
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::DEBUG,
+            'logLevel' => 'debug',
             'onDiagnostic' => function (array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -80,7 +78,7 @@ class FeaturevisorTest extends TestCase
     {
         $diagnostics = [];
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'onDiagnostic' => function (array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -95,7 +93,7 @@ class FeaturevisorTest extends TestCase
         $sdk->setContext(['userId' => '123']);
         self::assertNotContains('context_set', array_column($diagnostics, 'code'));
 
-        $sdk->setLogLevel(LogLevel::DEBUG);
+        $sdk->setLogLevel('debug');
         $sdk->setContext(['country' => 'nl']);
         self::assertContains('context_set', array_column($diagnostics, 'code'));
     }
@@ -1509,7 +1507,7 @@ class FeaturevisorTest extends TestCase
     {
         $events = [];
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'datafile' => [
                 'schemaVersion' => '2',
                 'revision' => 'base',
@@ -1587,7 +1585,7 @@ class FeaturevisorTest extends TestCase
         $closeCalls = 0;
 
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -1637,7 +1635,7 @@ class FeaturevisorTest extends TestCase
         $closed = [];
 
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -1681,7 +1679,7 @@ class FeaturevisorTest extends TestCase
         $diagnostics = [];
 
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'onDiagnostic' => function(array $diagnostic) use (&$diagnostics) {
                 $diagnostics[] = $diagnostic;
             },
@@ -1709,7 +1707,7 @@ class FeaturevisorTest extends TestCase
         $reporter = null;
 
         $sdk = Featurevisor::createFeaturevisor([
-            'logLevel' => LogLevel::ERROR,
+            'logLevel' => 'error',
             'modules' => [
                 [
                     'name' => 'listener',
@@ -1746,5 +1744,34 @@ class FeaturevisorTest extends TestCase
         ]);
 
         self::assertCount(1, $received);
+    }
+
+    public function testModuleDiagnosticLevelIsIndependentFromInstanceLevel(): void
+    {
+        $received = [];
+        $sdk = Featurevisor::createFeaturevisor([
+            'logLevel' => 'fatal',
+            'modules' => [[
+                'name' => 'observer',
+                'setup' => static function (array $api) use (&$received): void {
+                    $api['onDiagnostic'](
+                        static function (array $diagnostic) use (&$received): void {
+                            $received[] = $diagnostic;
+                        },
+                        ['logLevel' => 'debug']
+                    );
+                },
+            ]],
+        ]);
+
+        $sdk->isEnabled('missing');
+
+        $diagnostics = array_values(array_filter(
+            $received,
+            static fn(array $diagnostic): bool => $diagnostic['code'] === 'feature_not_found'
+        ));
+        self::assertCount(1, $diagnostics);
+        self::assertSame('missing', $diagnostics[0]['details']['featureKey']);
+        self::assertSame('feature_not_found', $diagnostics[0]['details']['reason']);
     }
 }

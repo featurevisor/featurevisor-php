@@ -2,83 +2,58 @@
 
 namespace Featurevisor\Tests;
 
-use Featurevisor\Internal\Logger;
+use Featurevisor\Events;
 use PHPUnit\Framework\TestCase;
 
-use Featurevisor\Events;
-use Featurevisor\Internal\DatafileReader;
-
-class EventsTest extends TestCase
+final class EventsTest extends TestCase
 {
-    public function testGetParamsForStickySetEventEmptyToNew()
+    public function testGetParamsForStickySetEventEmptyToNew(): void
     {
-        $previousStickyFeatures = [];
-        $newStickyFeatures = [
+        self::assertSame([
+            'features' => ['feature2', 'feature3'],
+            'replaced' => true,
+        ], Events::getParamsForStickySetEvent([], [
             'feature2' => ['enabled' => true],
             'feature3' => ['enabled' => true],
-        ];
-        $replace = true;
-
-        $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
-
-        self::assertEquals([
-            'features' => ['feature2', 'feature3'],
-            'replaced' => $replace,
-        ], $result);
+        ], true));
     }
 
-    public function testGetParamsForStickySetEventAddChangeRemove()
+    public function testGetParamsForStickySetEventAddChangeRemove(): void
     {
-        $previousStickyFeatures = [
+        self::assertSame([
+            'features' => ['feature1', 'feature2', 'feature3'],
+            'replaced' => true,
+        ], Events::getParamsForStickySetEvent([
             'feature1' => ['enabled' => true],
             'feature2' => ['enabled' => true],
-        ];
-        $newStickyFeatures = [
+        ], [
             'feature2' => ['enabled' => true],
             'feature3' => ['enabled' => true],
+        ], true));
+    }
+
+    /** @param array<string, array<string, mixed>> $features */
+    private function datafile(string $revision, array $features): array
+    {
+        return [
+            'schemaVersion' => '2',
+            'revision' => $revision,
+            'features' => $features,
+            'segments' => [],
         ];
-        $replace = true;
-
-        $result = Events::getParamsForStickySetEvent($previousStickyFeatures, $newStickyFeatures, $replace);
-
-        self::assertEquals([
-            'features' => ['feature1', 'feature2', 'feature3'],
-            'replaced' => $replace,
-        ], $result);
     }
 
-    public function testGetParamsForDatafileSetEventEmptyToNew()
+    public function testGetParamsForDatafileSetEventEmptyToNew(): void
     {
-        $logger = Logger::create([
-            'level' => 'error',
-        ]);
+        $result = Events::getParamsForDatafileSetEvent(
+            $this->datafile('1', []),
+            $this->datafile('2', [
+                'feature1' => ['hash' => 'hash1'],
+                'feature2' => ['hash' => 'hash2'],
+            ])
+        );
 
-        $previousDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '1',
-                'features' => [],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $newDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '2',
-                'features' => [
-                    'feature1' => ['bucketBy' => 'userId', 'hash' => 'hash1', 'traffic' => []],
-                    'feature2' => ['bucketBy' => 'userId', 'hash' => 'hash2', 'traffic' => []],
-                ],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
-
-        self::assertEquals([
+        self::assertSame([
             'revision' => '2',
             'previousRevision' => '1',
             'revisionChanged' => true,
@@ -87,89 +62,35 @@ class EventsTest extends TestCase
         ], $result);
     }
 
-    public function testGetParamsForDatafileSetEventChangeHashAddition()
+    public function testGetParamsForDatafileSetEventChangeHashAddition(): void
     {
-        $logger = Logger::create([
-            'level' => 'error',
-        ]);
+        $result = Events::getParamsForDatafileSetEvent(
+            $this->datafile('1', [
+                'feature1' => ['hash' => 'same'],
+                'feature2' => ['hash' => 'old'],
+            ]),
+            $this->datafile('2', [
+                'feature1' => ['hash' => 'same'],
+                'feature2' => ['hash' => 'new'],
+                'feature3' => ['hash' => 'added'],
+            ])
+        );
 
-        $previousDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '1',
-                'features' => [
-                    'feature1' => ['bucketBy' => 'userId', 'hash' => 'hash-same', 'traffic' => []],
-                    'feature2' => ['bucketBy' => 'userId', 'hash' => 'hash1-2', 'traffic' => []],
-                ],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $newDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '2',
-                'features' => [
-                    'feature1' => ['bucketBy' => 'userId', 'hash' => 'hash-same', 'traffic' => []],
-                    'feature2' => ['bucketBy' => 'userId', 'hash' => 'hash2-2', 'traffic' => []],
-                    'feature3' => ['bucketBy' => 'userId', 'hash' => 'hash2-3', 'traffic' => []],
-                ],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
-
-        self::assertEquals([
-            'revision' => '2',
-            'previousRevision' => '1',
-            'revisionChanged' => true,
-            'features' => ['feature2', 'feature3'],
-            'replaced' => false,
-        ], $result);
+        self::assertSame(['feature2', 'feature3'], $result['features']);
     }
 
-    public function testGetParamsForDatafileSetEventChangeHashRemoval()
+    public function testGetParamsForDatafileSetEventChangeHashRemoval(): void
     {
-        $logger = Logger::create([
-            'level' => 'error',
-        ]);
+        $result = Events::getParamsForDatafileSetEvent(
+            $this->datafile('1', [
+                'feature1' => ['hash' => 'same'],
+                'feature2' => ['hash' => 'old'],
+            ]),
+            $this->datafile('2', [
+                'feature2' => ['hash' => 'new'],
+            ])
+        );
 
-        $previousDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '1',
-                'features' => [
-                    'feature1' => ['bucketBy' => 'userId', 'hash' => 'hash-same', 'traffic' => []],
-                    'feature2' => ['bucketBy' => 'userId', 'hash' => 'hash1-2', 'traffic' => []],
-                ],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $newDatafileReader = DatafileReader::createFromOptions([
-            'datafile' => [
-                'schemaVersion' => '1.0.0',
-                'revision' => '2',
-                'features' => [
-                    'feature2' => ['bucketBy' => 'userId', 'hash' => 'hash2-2', 'traffic' => []],
-                ],
-                'segments' => [],
-            ],
-            'logger' => $logger,
-        ]);
-
-        $result = Events::getParamsForDatafileSetEvent($previousDatafileReader, $newDatafileReader);
-
-        self::assertEquals([
-            'revision' => '2',
-            'previousRevision' => '1',
-            'revisionChanged' => true,
-            'features' => ['feature1', 'feature2'],
-            'replaced' => false,
-        ], $result);
+        self::assertSame(['feature1', 'feature2'], $result['features']);
     }
 }

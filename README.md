@@ -84,6 +84,8 @@ $f = Featurevisor::createFeaturevisor([
 
 Most applications only need this factory and the returned `Featurevisor` instance. Public extension and observability APIs include modules, diagnostics, events, and the datafile arrays accepted by the factory.
 
+Treat an instance as request-owned in normal PHP applications. If a long-running parallel runtime shares an instance, serialize calls that mutate or close it. Module, event, and diagnostic callbacks are responsible for synchronizing mutable state that they capture.
+
 ## Initialization
 
 The SDK can be initialized by passing [datafile](https://featurevisor.com/docs/building-datafiles/) content directly:
@@ -558,7 +560,7 @@ Modules allow you to intercept the evaluation process, report diagnostics, and c
 
 ### Defining a module
 
-A module is a simple object with a unique required `name` and optional functions:
+A module is a simple array with optional lifecycle callbacks. A `name` is optional, but when provided it must be unique:
 
 If `setup` throws, the module is not registered. Featurevisor removes subscriptions created during setup, reports `module_setup_error`, and calls `close` when present.
 
@@ -666,6 +668,8 @@ $f->removeModule('my-custom-module');
 
 ## Child instance
 
+A child snapshots the parent keys that exist when it is spawned. Child values win for those keys. Parent keys introduced later are still inherited. Calling `close()` removes both child-owned listeners and subscriptions delegated to the parent.
+
 When dealing with purely client-side applications, it is understandable that there is only one user involved, like in browser or mobile applications.
 
 But when using Featurevisor SDK in server-side applications, where a single server instance can handle multiple user requests simultaneously, it is important to isolate the context for each request.
@@ -691,8 +695,11 @@ Similar to parent SDK, child instances also support several additional methods:
 
 - `setContext`
 - `setSticky`
+- `evaluateFlag`
 - `isEnabled`
+- `evaluateVariation`
 - `getVariation`
+- `evaluateVariable`
 - `getVariable`
 - `getVariableBoolean`
 - `getVariableString`
@@ -919,7 +926,7 @@ $ make test-example-1
 ### Releasing
 
 - Manually create a new release on [GitHub](https://github.com/featurevisor/featurevisor-php/releases)
-- Tag it with a prefix of `v`, like `v1.0.0`
+- Tag it with a prefix of `v`, like `v2.0.0`
 - The Packagist workflow notifies [Packagist](https://packagist.org/packages/featurevisor/featurevisor-php) after the tag is pushed
 
 ## License

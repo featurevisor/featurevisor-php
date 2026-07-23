@@ -125,7 +125,8 @@ jobs:
           composer config prefer-stable true
           composer config repositories.featurevisor "{\"type\":\"path\",\"url\":\"$GITHUB_WORKSPACE\",\"options\":{\"symlink\":false}}"
           composer require featurevisor/featurevisor-php:@dev --no-interaction --prefer-dist --no-progress
-          php -r 'require "vendor/autoload.php"; $f = Featurevisor\Featurevisor::createFeaturevisor(["logLevel" => "fatal"]); if ($f->getSchemaVersion() !== "2" || class_exists(Featurevisor\Logger::class) || class_exists(OpenFeature\OpenFeatureAPI::class)) { exit(1); }'
+          php -r 'require "vendor/autoload.php"; $f = Featurevisor\Featurevisor::createFeaturevisor(["logLevel" => "fatal"]); if ($f->getSchemaVersion() !== "2" || class_exists("Featurevisor\\Logger") || class_exists("Featurevisor\\Internal\\Logger") || class_exists(OpenFeature\OpenFeatureAPI::class)) { exit(1); }'
+          if composer show psr/log --no-interaction >/dev/null 2>&1; then exit 1; fi
 
       - name: Verify SDK with OpenFeature
         shell: bash

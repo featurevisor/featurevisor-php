@@ -20,12 +20,6 @@ parameters:
 			path: src/Bucketer.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: src/EvaluateSticky.php
-
-		-
 			message: '#^Call to function method_exists\(\) with Featurevisor\\Featurevisor and ''getVariation'' will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1

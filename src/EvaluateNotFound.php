@@ -2,7 +2,7 @@
 
 namespace Featurevisor;
 
-use Psr\Log\LoggerInterface;
+use Featurevisor\Internal\Diagnostics;
 
 class EvaluateNotFound
 {
@@ -11,13 +11,11 @@ class EvaluateNotFound
         $type = $options['type'];
         $featureKey = $options['featureKey'];
         $variableKey = $options['variableKey'] ?? null;
-        /** @var LoggerInterface $logger */
-        $logger = $options['logger'];
-        $datafileReader = $options['datafileReader'];
+        $datafile = $options['datafile'];
 
         $result = [];
 
-        $feature = is_string($featureKey) ? $datafileReader->getFeature($featureKey) : $featureKey;
+        $feature = is_string($featureKey) ? $datafile['getFeature']($featureKey) : $featureKey;
 
         // feature: not found
         if (!$feature) {
@@ -27,7 +25,7 @@ class EvaluateNotFound
                 'reason' => Evaluation::FEATURE_NOT_FOUND
             ];
 
-            $logger->warning('feature not found', $result['evaluation']);
+            Diagnostics::reportEvaluation($options, $result['evaluation'], 'Feature not found', 'warn', 'feature_not_found');
 
             return $result;
         }
@@ -36,7 +34,12 @@ class EvaluateNotFound
 
         // feature: deprecated
         if ($type === 'flag' && ($feature['deprecated'] ?? false)) {
-            $logger->warning('feature is deprecated', ['featureKey' => $featureKey]);
+            ($options['reportDiagnostic'])([
+                'level' => 'warn',
+                'code' => 'deprecated_feature',
+                'message' => 'Feature is deprecated',
+                'details' => ['featureKey' => $featureKey],
+            ]);
         }
 
         // variableSchema
@@ -56,16 +59,18 @@ class EvaluateNotFound
                     'variableKey' => $variableKey
                 ];
 
-                $logger->warning('variable schema not found', $result['evaluation']);
+                Diagnostics::reportEvaluation($options, $result['evaluation'], 'Variable schema not found', 'warn', 'variable_not_found');
 
                 return $result;
             }
 
             $result['variableSchema'] = $variableSchema;
             if ($variableSchema['deprecated'] ?? false) {
-                $logger->warning('variable is deprecated', [
-                    'featureKey' => $featureKey,
-                    'variableKey' => $variableKey
+                ($options['reportDiagnostic'])([
+                    'level' => 'warn',
+                    'code' => 'deprecated_variable',
+                    'message' => 'Variable is deprecated',
+                    'details' => ['featureKey' => $featureKey, 'variableKey' => $variableKey],
                 ]);
             }
         }
@@ -78,7 +83,7 @@ class EvaluateNotFound
                 'reason' => Evaluation::NO_VARIATIONS
             ];
 
-            $logger->warning('no variations', $result['evaluation']);
+            Diagnostics::reportEvaluation($options, $result['evaluation'], 'No variations', 'warn', 'no_variations');
 
             return $result;
         }

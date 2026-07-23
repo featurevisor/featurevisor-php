@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\Diagnostics;
+
 class EvaluateForced
 {
     public static function evaluate(array $options, array $feature, ?array $variableSchema = null): array
@@ -10,10 +12,9 @@ class EvaluateForced
         $featureKey = $options['featureKey'];
         $variableKey = $options['variableKey'] ?? null;
         $context = $options['context'];
-        $logger = $options['logger'];
-        $datafileReader = $options['datafileReader'];
+        $datafile = $options['datafile'];
 
-        $forceResult = $datafileReader->getMatchedForce($feature, $context);
+        $forceResult = $datafile['getMatchedForce']($feature, $context);
         $force = $forceResult['force'] ?? null;
         $forceIndex = $forceResult['forceIndex'] ?? null;
 
@@ -24,7 +25,7 @@ class EvaluateForced
 
         if ($force) {
             // flag
-            if ($type === 'flag' && isset($force['enabled'])) {
+            if ($type === 'flag' && array_key_exists('enabled', $force)) {
                 $result['evaluation'] = [
                     'type' => $type,
                     'featureKey' => $featureKey,
@@ -34,7 +35,7 @@ class EvaluateForced
                     'enabled' => $force['enabled']
                 ];
 
-                $logger->debug('forced enabled found', $result['evaluation']);
+                Diagnostics::reportEvaluation($options, $result['evaluation'], 'forced enabled found');
 
                 return $result;
             }
@@ -59,14 +60,14 @@ class EvaluateForced
                         'variation' => $variation
                     ];
 
-                    $logger->debug('forced variation found', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'forced variation found');
 
                     return $result;
                 }
             }
 
             // variable
-            if ($variableKey && isset($force['variables'][$variableKey])) {
+            if ($variableKey && isset($force['variables']) && array_key_exists($variableKey, $force['variables'])) {
                 $result['evaluation'] = [
                     'type' => $type,
                     'featureKey' => $featureKey,
@@ -78,7 +79,7 @@ class EvaluateForced
                     'variableValue' => $force['variables'][$variableKey]
                 ];
 
-                $logger->debug('forced variable', $result['evaluation']);
+                Diagnostics::reportEvaluation($options, $result['evaluation'], 'forced variable');
 
                 return $result;
             }

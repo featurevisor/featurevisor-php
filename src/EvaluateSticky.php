@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\Diagnostics;
+
 class EvaluateSticky
 {
     public static function evaluate(array $options): ?array
@@ -10,13 +12,11 @@ class EvaluateSticky
         $featureKey = $options['featureKey'];
         $variableKey = $options['variableKey'] ?? null;
         $sticky = $options['sticky'] ?? null;
-        $logger = $options['logger'];
-
-        if ($sticky && isset($sticky[$featureKey])) {
+        if ($sticky && array_key_exists($featureKey, $sticky)) {
             $evaluation = null;
 
             // flag
-            if ($type === 'flag' && isset($sticky[$featureKey]['enabled'])) {
+            if ($type === 'flag' && array_key_exists('enabled', $sticky[$featureKey])) {
                 $evaluation = [
                     'type' => $type,
                     'featureKey' => $featureKey,
@@ -25,16 +25,15 @@ class EvaluateSticky
                     'enabled' => $sticky[$featureKey]['enabled']
                 ];
 
-                $logger->debug('using sticky enabled', $evaluation);
+                Diagnostics::reportEvaluation($options, $evaluation, 'using sticky enabled');
 
                 return $evaluation;
             }
 
             // variation
             if ($type === 'variation') {
-                $variationValue = $sticky[$featureKey]['variation'] ?? null;
-
-                if ($variationValue !== null) {
+                if (array_key_exists('variation', $sticky[$featureKey])) {
+                    $variationValue = $sticky[$featureKey]['variation'];
                     $evaluation = [
                         'type' => $type,
                         'featureKey' => $featureKey,
@@ -42,7 +41,7 @@ class EvaluateSticky
                         'variationValue' => $variationValue
                     ];
 
-                    $logger->debug('using sticky variation', $evaluation);
+                    Diagnostics::reportEvaluation($options, $evaluation, 'using sticky variation');
 
                     return $evaluation;
                 }
@@ -52,22 +51,19 @@ class EvaluateSticky
             if ($variableKey) {
                 $variables = $sticky[$featureKey]['variables'] ?? null;
 
-                if ($variables && isset($variables[$variableKey])) {
+                if ($variables && array_key_exists($variableKey, $variables)) {
                     $result = $variables[$variableKey];
+                    $evaluation = [
+                        'type' => $type,
+                        'featureKey' => $featureKey,
+                        'reason' => Evaluation::STICKY,
+                        'variableKey' => $variableKey,
+                        'variableValue' => $result
+                    ];
 
-                    if ($result !== null) {
-                        $evaluation = [
-                            'type' => $type,
-                            'featureKey' => $featureKey,
-                            'reason' => Evaluation::STICKY,
-                            'variableKey' => $variableKey,
-                            'variableValue' => $result
-                        ];
+                    Diagnostics::reportEvaluation($options, $evaluation, 'using sticky variable');
 
-                        $logger->debug('using sticky variable', $evaluation);
-
-                        return $evaluation;
-                    }
+                    return $evaluation;
                 }
             }
         }

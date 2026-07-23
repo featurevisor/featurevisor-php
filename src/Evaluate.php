@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\Diagnostics;
+
 class Evaluate
 {
     public static function evaluateWithModules(array $opts): array
@@ -17,18 +19,19 @@ class Evaluate
 
             // default: variation
             if (
-                isset($options['defaultVariationValue']) &&
+                array_key_exists('defaultVariationValue', $options) &&
                 $evaluation['type'] === 'variation' &&
-                !isset($evaluation['variationValue'])
+                !array_key_exists('variationValue', $evaluation) &&
+                !array_key_exists('variation', $evaluation)
             ) {
                 $evaluation['variationValue'] = $options['defaultVariationValue'];
             }
 
             // default: variable
             if (
-                isset($options['defaultVariableValue']) &&
+                array_key_exists('defaultVariableValue', $options) &&
                 $evaluation['type'] === 'variable' &&
-                !isset($evaluation['variableValue'])
+                !array_key_exists('variableValue', $evaluation)
             ) {
                 $evaluation['variableValue'] = $options['defaultVariableValue'];
             }
@@ -37,21 +40,19 @@ class Evaluate
             $evaluation = $modulesManager->runAfterModules($evaluation, $options);
 
             return $evaluation;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $type = $opts['type'];
             $featureKey = $opts['featureKey'];
             $variableKey = $opts['variableKey'] ?? null;
-            $logger = $opts['logger'];
-
             $evaluation = [
                 'type' => $type,
                 'featureKey' => $featureKey,
                 'variableKey' => $variableKey,
                 'reason' => Evaluation::ERROR,
-                'error' => $e->getMessage()
+                'error' => $e
             ];
 
-            $logger->error('error during evaluation', $evaluation);
+            Diagnostics::reportEvaluation($opts, $evaluation, 'Error during evaluation', 'error', 'evaluation_error');
 
             return $evaluation;
         }
@@ -61,8 +62,6 @@ class Evaluate
     {
         $type = $options['type'];
         $featureKey = $options['featureKey'];
-        $logger = $options['logger'];
-
         if ($type === 'flag' && isset($feature['required']) && count($feature['required']) > 0) {
             $requiredFeaturesAreEnabled = true;
 
@@ -118,7 +117,7 @@ class Evaluate
                     'enabled' => $requiredFeaturesAreEnabled
                 ];
 
-                $logger->debug('required features not enabled', $evaluation);
+                Diagnostics::reportEvaluation($options, $evaluation, 'required features not enabled');
 
                 return $evaluation;
             }
@@ -132,8 +131,6 @@ class Evaluate
         $type = $options['type'];
         $featureKey = $options['featureKey'];
         $variableKey = $options['variableKey'] ?? null;
-        $logger = $options['logger'];
-
         $evaluation = null;
 
         try {
@@ -142,7 +139,7 @@ class Evaluate
 
             if ($type !== 'flag') {
                 // needed by variation and variable evaluations
-                $flag = $options['flagEvaluation'] ?? self::evaluate(array_merge($options, [
+                $flag = self::evaluate(array_merge($options, [
                     'type' => 'flag'
                 ]));
 
@@ -201,19 +198,19 @@ class Evaluate
                 'enabled' => false
             ];
 
-            $logger->debug('nothing matched', $evaluation);
+            Diagnostics::reportEvaluation($options, $evaluation, 'nothing matched');
 
             return $evaluation;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $evaluation = [
                 'type' => $type,
                 'featureKey' => $featureKey,
                 'variableKey' => $variableKey,
                 'reason' => Evaluation::ERROR,
-                'error' => $e->getMessage()
+                'error' => $e
             ];
 
-            $logger->error('error', $evaluation);
+            Diagnostics::reportEvaluation($options, $evaluation, 'Error during evaluation', 'error', 'evaluation_error');
 
             return $evaluation;
         }

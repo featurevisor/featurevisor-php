@@ -2,8 +2,6 @@
 
 namespace Featurevisor;
 
-use Featurevisor\Internal\DatafileReader;
-
 class Events
 {
     public static function getParamsForStickySetEvent(array $previousStickyFeatures = [], array $newStickyFeatures = [], bool $replace = false): array
@@ -20,13 +18,13 @@ class Events
         ];
     }
 
-    public static function getParamsForDatafileSetEvent(DatafileReader $previousDatafileReader, DatafileReader $newDatafileReader, bool $replace = false): array
+    public static function getParamsForDatafileSetEvent(array $previousDatafile, array $newDatafile, bool $replace = false): array
     {
-        $previousRevision = $previousDatafileReader->getRevision();
-        $previousFeatureKeys = $previousDatafileReader->getFeatureKeys();
+        $previousRevision = $previousDatafile['revision'];
+        $previousFeatureKeys = array_keys($previousDatafile['features']);
 
-        $newRevision = $newDatafileReader->getRevision();
-        $newFeatureKeys = $newDatafileReader->getFeatureKeys();
+        $newRevision = $newDatafile['revision'];
+        $newFeatureKeys = array_keys($newDatafile['features']);
 
         // results
         $removedFeatures = [];
@@ -42,8 +40,8 @@ class Events
             }
 
             // feature exists in both datafiles, check if it was changed
-            $previousFeature = $previousDatafileReader->getFeature($previousFeatureKey);
-            $newFeature = $newDatafileReader->getFeature($previousFeatureKey);
+            $previousFeature = $previousDatafile['features'][$previousFeatureKey];
+            $newFeature = $newDatafile['features'][$previousFeatureKey];
 
             if (($previousFeature['hash'] ?? null) !== ($newFeature['hash'] ?? null)) {
                 // feature was changed in new datafile

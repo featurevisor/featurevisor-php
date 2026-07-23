@@ -18,6 +18,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a semantic version tag such as v2.0.0"
+            exit 1
+          fi
+
+      - name: Install and verify package
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          make check
+
       - name: Notify Packagist
         shell: bash
         env:
