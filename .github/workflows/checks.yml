@@ -3,49 +3,174 @@ name: Checks
 on:
   push:
     branches:
-      - '**'
+      - main
+    tags:
+      - 'v*.*.*'
   pull_request:
-    types:
-      - opened
-      - synchronize # when a PR is updated
-      - reopened # when a PR is reopened
-      - ready_for_review # when a PR is ready for review
-      - review_requested # when a PR is requested for review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ci:
-    name: Checks
+  base-sdk:
+    name: Base SDK (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.0'
+          - '8.5'
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
-          # extensions: mbstring, intl, dom
+          php-version: ${{ matrix.php }}
           coverage: none
+          tools: composer:v2, phpunit:9.6.35
 
-      - uses: actions/setup-node@v4
+      - name: Install base SDK dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --no-progress
+
+      - name: Test base SDK without OpenFeature
+        run: phpunit --bootstrap vendor/autoload.php --exclude-group openfeature tests
+
+  openfeature:
+    name: OpenFeature (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.0'
+          - '8.5'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
         with:
-          node-version-file: '.nvmrc'
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: SAST
+      - name: Test OpenFeature provider
+        run: vendor/bin/phpunit --group openfeature tests
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer configuration
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Audit dependencies
+        run: composer audit --locked --no-interaction
+
+      - name: Static analysis
         run: composer sast
 
-      - name: Test
+      - name: Run complete unit suite
         run: composer test
 
-      - name: Setup Featurevisor example-1 project
+  package-boundaries:
+    name: Package boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify base SDK without OpenFeature
+        shell: bash
+        run: |
+          mkdir "${{ runner.temp }}/featurevisor-base-consumer"
+          cd "${{ runner.temp }}/featurevisor-base-consumer"
+          composer init --name=featurevisor/base-consumer --no-interaction
+          composer config minimum-stability dev
+          composer config prefer-stable true
+          composer config repositories.featurevisor "{\"type\":\"path\",\"url\":\"$GITHUB_WORKSPACE\",\"options\":{\"symlink\":false}}"
+          composer require featurevisor/featurevisor-php:@dev --no-interaction --prefer-dist --no-progress
+          php -r 'require "vendor/autoload.php"; $f = Featurevisor\Featurevisor::createFeaturevisor(["logLevel" => "fatal"]); if ($f->getSchemaVersion() !== "2" || class_exists("Featurevisor\\Logger") || class_exists("Featurevisor\\Internal\\Logger") || class_exists(OpenFeature\OpenFeatureAPI::class)) { exit(1); }'
+          if composer show psr/log --no-interaction >/dev/null 2>&1; then exit 1; fi
+
+      - name: Verify SDK with OpenFeature
+        shell: bash
+        run: |
+          mkdir "${{ runner.temp }}/featurevisor-openfeature-consumer"
+          cd "${{ runner.temp }}/featurevisor-openfeature-consumer"
+          composer init --name=featurevisor/openfeature-consumer --no-interaction
+          composer config minimum-stability dev
+          composer config prefer-stable true
+          composer config repositories.featurevisor "{\"type\":\"path\",\"url\":\"$GITHUB_WORKSPACE\",\"options\":{\"symlink\":false}}"
+          composer require featurevisor/featurevisor-php:@dev open-feature/sdk:^2.2 --no-interaction --prefer-dist --no-progress
+          php -r 'require "vendor/autoload.php"; $p = new Featurevisor\OpenFeatureProvider(["logLevel" => "fatal"]); if ($p->getMetadata()->getName() !== "Featurevisor") { exit(1); } $p->shutdown();'
+
+  example-project:
+    name: Featurevisor example-1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          package-manager-cache: false
+
+      - name: Set up Featurevisor example-1 project
         run: |
           mkdir example-1
-          (cd example-1 && npx @featurevisor/cli@2.x init --example=1)
+          (cd example-1 && npx --yes @featurevisor/cli@3 init --example=1)
           (cd example-1 && npm install)
-          (cd example-1 && npx featurevisor test)
+          (cd example-1 && npx featurevisor build)
+          (cd example-1 && npx featurevisor test --onlyFailures)
 
       - name: Run Featurevisor project tests against PHP SDK
-        run: (cd ./example-1 && ../featurevisor test)
+        run: ./featurevisor test --projectDirectoryPath=./example-1 --onlyFailures --quiet

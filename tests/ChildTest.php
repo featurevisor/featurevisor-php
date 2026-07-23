@@ -173,9 +173,12 @@ class ChildTest extends TestCase {
 
         self::assertTrue($childF->isEnabled('test'));
         self::assertEquals('control', $childF->getVariation('test'));
+        self::assertTrue($childF->evaluateFlag('test')['enabled']);
+        self::assertEquals('control', $childF->evaluateVariation('test')['variation']['value']);
 
         self::assertEquals('black', $childF->getVariable('test', 'color'));
         self::assertEquals('black', $childF->getVariableString('test', 'color'));
+        self::assertEquals('black', $childF->evaluateVariable('test', 'color')['variableValue']);
 
         self::assertEquals(false, $childF->getVariable('test', 'showSidebar'));
         self::assertEquals(false, $childF->getVariableBoolean('test', 'showSidebar'));
@@ -206,10 +209,48 @@ class ChildTest extends TestCase {
             'newFeature' => [ 'enabled' => true ]
         ]);
         self::assertTrue($childF->isEnabled('newFeature'));
+        self::assertEquals('sticky', $childF->evaluateFlag('newFeature')['reason']);
 
         $allEvaluations = $childF->getAllEvaluations();
         self::assertEquals(['test', 'anotherTest'], array_keys($allEvaluations));
 
         $childF->close();
+    }
+
+    public function testCloseRemovesDelegatedParentSubscriptions(): void
+    {
+        $parent = Featurevisor::createFeaturevisor(['logLevel' => 'fatal']);
+        $child = $parent->spawn();
+        $events = [];
+        $child->on('datafile_set', static function (array $event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        $child->close();
+        $child->close();
+        $parent->setDatafile([
+            'schemaVersion' => '2',
+            'revision' => 'after-close',
+            'segments' => [],
+            'features' => [],
+        ], true);
+
+        self::assertSame([], $events);
+    }
+
+    public function testContextMatchesJavaScriptSnapshotBehavior(): void
+    {
+        $parent = Featurevisor::createFeaturevisor([
+            'context' => ['country' => 'nl', 'plan' => 'free'],
+            'logLevel' => 'fatal',
+        ]);
+        $child = $parent->spawn(['country' => 'de']);
+        $parent->setContext(['plan' => 'pro', 'locale' => 'de-DE']);
+
+        self::assertSame([
+            'country' => 'de',
+            'plan' => 'free',
+            'locale' => 'de-DE',
+        ], $child->getContext());
     }
 }

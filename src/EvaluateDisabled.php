@@ -2,16 +2,16 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\Diagnostics;
+
 class EvaluateDisabled
 {
     public static function evaluate(array $options, array $flag): ?array
     {
         $type = $options['type'];
         $featureKey = $options['featureKey'];
-        $datafileReader = $options['datafileReader'];
+        $datafile = $options['datafile'];
         $variableKey = $options['variableKey'] ?? null;
-        $logger = $options['logger'];
-
         if ($type !== 'flag') {
             $evaluation = null;
 
@@ -22,14 +22,14 @@ class EvaluateDisabled
                     'reason' => Evaluation::DISABLED
                 ];
 
-                $feature = $datafileReader->getFeature($featureKey);
+                $feature = $datafile['getFeature']($featureKey);
 
                 // serve variable default value if feature is disabled (if explicitly specified)
                 if ($type === 'variable') {
                     if ($feature && $variableKey && isset($feature['variablesSchema'][$variableKey])) {
                         $variableSchema = $feature['variablesSchema'][$variableKey];
 
-                        if (isset($variableSchema['disabledValue'])) {
+                        if (array_key_exists('disabledValue', $variableSchema)) {
                             // disabledValue: <value>
                             $evaluation = [
                                 'type' => $type,
@@ -56,7 +56,7 @@ class EvaluateDisabled
                 }
 
                 // serve disabled variation value if feature is disabled (if explicitly specified)
-                if ($type === 'variation' && $feature && isset($feature['disabledVariationValue'])) {
+                if ($type === 'variation' && $feature && array_key_exists('disabledVariationValue', $feature)) {
                     $evaluation = [
                         'type' => $type,
                         'featureKey' => $featureKey,
@@ -66,7 +66,7 @@ class EvaluateDisabled
                     ];
                 }
 
-                $logger->debug('feature is disabled', $evaluation);
+                Diagnostics::reportEvaluation($options, $evaluation, 'feature is disabled');
 
                 return $evaluation;
             }

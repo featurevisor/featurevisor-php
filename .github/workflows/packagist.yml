@@ -5,22 +5,51 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: packagist-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ci:
     name: Notify Packagist
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v7
 
-      - name: Notify
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v2\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a Featurevisor PHP v2 semantic version tag such as v2.0.0"
+            exit 1
+          fi
+
+      - name: Install and verify package
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          make check
+
+      - name: Notify Packagist
         shell: bash
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
         run: |
-          echo "Notifying Packagist of new release: ${{ github.event.release.tag_name }}"
+          echo "Notifying Packagist of new release: ${{ github.ref_name }}"
 
-          curl -X POST -H 'content-type:application/json' \
+          curl --fail-with-body --silent --show-error --request POST \
+            --header 'content-type: application/json' \
             "https://packagist.org/api/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_API_TOKEN" \
-            -d '{"repository":{"url":"https://packagist.org/packages/featurevisor/featurevisor-php"}}'
+            --data '{"repository":{"url":"https://packagist.org/packages/featurevisor/featurevisor-php"}}'

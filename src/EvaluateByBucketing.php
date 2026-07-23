@@ -2,6 +2,8 @@
 
 namespace Featurevisor;
 
+use Featurevisor\Internal\Diagnostics;
+
 class EvaluateByBucketing
 {
     public static function evaluate(array $options, array $feature, ?array $variableSchema = null, ?array $force = null): array
@@ -10,8 +12,7 @@ class EvaluateByBucketing
         $featureKey = $options['featureKey'];
         $context = $options['context'];
         $variableKey = $options['variableKey'] ?? null;
-        $logger = $options['logger'];
-        $datafileReader = $options['datafileReader'];
+        $datafile = $options['datafile'];
         $modulesManager = $options['modulesManager'];
 
         // bucketKey
@@ -19,7 +20,7 @@ class EvaluateByBucketing
             'featureKey' => $featureKey,
             'bucketBy' => $feature['bucketBy'],
             'context' => $context,
-            'logger' => $logger
+            'reportDiagnostic' => $options['reportDiagnostic'] ?? null
         ]);
 
         $bucketKey = $modulesManager->runBucketKeyModules([
@@ -49,13 +50,13 @@ class EvaluateByBucketing
         $matchedAllocation = null;
 
         if ($type !== 'flag') {
-            $matchedTraffic = $datafileReader->getMatchedTraffic($feature['traffic'], $context);
+            $matchedTraffic = $datafile['getMatchedTraffic']($feature['traffic'], $context);
 
             if ($matchedTraffic) {
-                $matchedAllocation = $datafileReader->getMatchedAllocation($matchedTraffic, $bucketValue);
+                $matchedAllocation = $datafile['getMatchedAllocation']($matchedTraffic, $bucketValue);
             }
         } else {
-            $matchedTraffic = $datafileReader->getMatchedTraffic($feature['traffic'], $context);
+            $matchedTraffic = $datafile['getMatchedTraffic']($feature['traffic'], $context);
         }
 
         $result = [
@@ -79,7 +80,7 @@ class EvaluateByBucketing
                     'enabled' => false
                 ];
 
-                $logger->debug('matched rule with 0 percentage', $result['evaluation']);
+                Diagnostics::reportEvaluation($options, $result['evaluation'], 'matched rule with 0 percentage');
 
                 return $result;
             }
@@ -109,7 +110,7 @@ class EvaluateByBucketing
                             'enabled' => isset($matchedTraffic['enabled']) ? $matchedTraffic['enabled'] : true
                         ];
 
-                        $logger->debug('matched', $result['evaluation']);
+                        Diagnostics::reportEvaluation($options, $result['evaluation'], 'matched');
 
                         return $result;
                     }
@@ -124,7 +125,7 @@ class EvaluateByBucketing
                         'enabled' => false
                     ];
 
-                    $logger->debug('not matched', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'not matched');
 
                     return $result;
                 }
@@ -142,7 +143,7 @@ class EvaluateByBucketing
                         'enabled' => $matchedTraffic['enabled']
                     ];
 
-                    $logger->debug('override from rule', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'override from rule');
 
                     return $result;
                 }
@@ -160,7 +161,7 @@ class EvaluateByBucketing
                         'enabled' => true
                     ];
 
-                    $logger->debug('matched traffic', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'matched traffic');
 
                     return $result;
                 }
@@ -190,7 +191,7 @@ class EvaluateByBucketing
                             'variation' => $variation
                         ];
 
-                        $logger->debug('override from rule', $result['evaluation']);
+                        Diagnostics::reportEvaluation($options, $result['evaluation'], 'override from rule');
 
                         return $result;
                     }
@@ -218,7 +219,7 @@ class EvaluateByBucketing
                             'variation' => $variation
                         ];
 
-                        $logger->debug('allocated variation', $result['evaluation']);
+                        Diagnostics::reportEvaluation($options, $result['evaluation'], 'allocated variation');
 
                         return $result;
                     }
@@ -238,11 +239,12 @@ class EvaluateByBucketing
 
                     foreach ($overrides as $index => $o) {
                         if (isset($o['conditions'])) {
-                            $conditions = is_string($o['conditions']) && $o['conditions'] !== '*'
-                                ? json_decode($o['conditions'], true)
-                                : $o['conditions'];
+                            $conditions = Conditions::parseConditionsIfStringified(
+                                $o['conditions'],
+                                $options['reportDiagnostic'] ?? null
+                            );
 
-                            if ($datafileReader->allConditionsAreMatched($conditions, $context)) {
+                            if ($datafile['allConditionsAreMatched']($conditions, $context)) {
                                 $override = $o;
                                 $overrideIndex = $index;
                                 break;
@@ -250,8 +252,8 @@ class EvaluateByBucketing
                         }
 
                         if (isset($o['segments'])) {
-                            $segments = $datafileReader->parseSegmentsIfStringified($o['segments']);
-                            if ($datafileReader->allSegmentsAreMatched($segments, $context)) {
+                            $segments = Conditions::parseSegmentsIfStringified($o['segments']);
+                            if ($datafile['allSegmentsAreMatched']($segments, $context)) {
                                 $override = $o;
                                 $overrideIndex = $index;
                                 break;
@@ -274,7 +276,7 @@ class EvaluateByBucketing
                             'variableOverrideIndex' => $overrideIndex,
                         ];
 
-                        $logger->debug('variable override from rule', $result['evaluation']);
+                        Diagnostics::reportEvaluation($options, $result['evaluation'], 'variable override from rule');
 
                         return $result;
                     }
@@ -295,7 +297,7 @@ class EvaluateByBucketing
                         'variableValue' => $matchedTraffic['variables'][$variableKey]
                     ];
 
-                    $logger->debug('override from rule', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'override from rule');
 
                     return $result;
                 }
@@ -325,22 +327,26 @@ class EvaluateByBucketing
                     $overrides = $variation['variableOverrides'][$variableKey];
 
                     $override = null;
-                    foreach ($overrides as $o) {
+                    $overrideIndex = -1;
+                    foreach ($overrides as $index => $o) {
                         if (isset($o['conditions'])) {
-                            $conditions = is_string($o['conditions']) && $o['conditions'] !== '*'
-                                ? json_decode($o['conditions'], true)
-                                : $o['conditions'];
+                            $conditions = Conditions::parseConditionsIfStringified(
+                                $o['conditions'],
+                                $options['reportDiagnostic'] ?? null
+                            );
 
-                            if ($datafileReader->allConditionsAreMatched($conditions, $context)) {
+                            if ($datafile['allConditionsAreMatched']($conditions, $context)) {
                                 $override = $o;
+                                $overrideIndex = $index;
                                 break;
                             }
                         }
 
                         if (isset($o['segments'])) {
-                            $segments = $datafileReader->parseSegmentsIfStringified($o['segments']);
-                            if ($datafileReader->allSegmentsAreMatched($segments, $context)) {
+                            $segments = Conditions::parseSegmentsIfStringified($o['segments']);
+                            if ($datafile['allSegmentsAreMatched']($segments, $context)) {
                                 $override = $o;
+                                $overrideIndex = $index;
                                 break;
                             }
                         }
@@ -357,16 +363,17 @@ class EvaluateByBucketing
                             'traffic' => $matchedTraffic,
                             'variableKey' => $variableKey,
                             'variableSchema' => $variableSchema,
-                            'variableValue' => $override['value']
+                            'variableValue' => $override['value'],
+                            'variableOverrideIndex' => $overrideIndex,
                         ];
 
-                        $logger->debug('variable override', $result['evaluation']);
+                        Diagnostics::reportEvaluation($options, $result['evaluation'], 'variable override from variation');
 
                         return $result;
                     }
                 }
 
-                if ($variation && isset($variation['variables'][$variableKey])) {
+                if ($variation && isset($variation['variables']) && array_key_exists($variableKey, $variation['variables'])) {
                     $result['evaluation'] = [
                         'type' => $type,
                         'featureKey' => $featureKey,
@@ -380,7 +387,7 @@ class EvaluateByBucketing
                         'variableValue' => $variation['variables'][$variableKey]
                     ];
 
-                    $logger->debug('allocated variable', $result['evaluation']);
+                    Diagnostics::reportEvaluation($options, $result['evaluation'], 'allocated variable');
 
                     return $result;
                 }
@@ -397,7 +404,7 @@ class EvaluateByBucketing
                 'bucketValue' => $bucketValue
             ];
 
-            $logger->debug('no matched variation', $result['evaluation']);
+            Diagnostics::reportEvaluation($options, $result['evaluation'], 'no matched variation');
 
             return $result;
         }
@@ -415,7 +422,7 @@ class EvaluateByBucketing
                     'variableValue' => $variableSchema['defaultValue']
                 ];
 
-                $logger->debug('using default value', $result['evaluation']);
+                Diagnostics::reportEvaluation($options, $result['evaluation'], 'using default value');
 
                 return $result;
             }
@@ -429,7 +436,7 @@ class EvaluateByBucketing
                 'bucketValue' => $bucketValue
             ];
 
-            $logger->debug('variable not found', $result['evaluation']);
+            Diagnostics::reportEvaluation($options, $result['evaluation'], 'variable not found');
 
             return $result;
         }

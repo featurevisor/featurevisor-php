@@ -42,6 +42,14 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
   - [Registering modules](#registering-modules)
 - [Child instance](#child-instance)
 - [Close](#close)
+- [OpenFeature](#openfeature)
+  - [Installation](#installation-1)
+  - [Provider setup](#provider-setup)
+  - [Flag key mapping](#flag-key-mapping)
+  - [Context mapping](#context-mapping)
+  - [Resolution details](#resolution-details)
+  - [Tracking](#tracking)
+  - [Using an existing Featurevisor instance](#using-an-existing-featurevisor-instance)
 - [CLI usage](#cli-usage)
   - [Test](#test)
   - [Benchmark](#benchmark)
@@ -56,7 +64,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
 
 ## Installation
 
-In your PHP application, install the SDK using [Composer](https://getcomposer.org/):
+The Featurevisor PHP SDK requires PHP 8.0 or newer. Install it using [Composer](https://getcomposer.org/):
 
 ```
 $ composer require featurevisor/featurevisor-php
@@ -75,6 +83,8 @@ $f = Featurevisor::createFeaturevisor([
 ```
 
 Most applications only need this factory and the returned `Featurevisor` instance. Public extension and observability APIs include modules, diagnostics, events, and the datafile arrays accepted by the factory.
+
+Treat an instance as request-owned in normal PHP applications. If a long-running parallel runtime shares an instance, serialize calls that mutate or close it. Module, event, and diagnostic callbacks are responsible for synchronizing mutable state that they capture.
 
 ## Initialization
 
@@ -550,7 +560,7 @@ Modules allow you to intercept the evaluation process, report diagnostics, and c
 
 ### Defining a module
 
-A module is a simple object with a unique required `name` and optional functions:
+A module is a simple array with optional lifecycle callbacks. A `name` is optional, but when provided it must be unique:
 
 If `setup` throws, the module is not registered. Featurevisor removes subscriptions created during setup, reports `module_setup_error`, and calls `close` when present.
 
@@ -658,6 +668,8 @@ $f->removeModule('my-custom-module');
 
 ## Child instance
 
+A child snapshots the parent keys that exist when it is spawned. Child values win for those keys. Parent keys introduced later are still inherited. Calling `close()` removes both child-owned listeners and subscriptions delegated to the parent.
+
 When dealing with purely client-side applications, it is understandable that there is only one user involved, like in browser or mobile applications.
 
 But when using Featurevisor SDK in server-side applications, where a single server instance can handle multiple user requests simultaneously, it is important to isolate the context for each request.
@@ -683,8 +695,11 @@ Similar to parent SDK, child instances also support several additional methods:
 
 - `setContext`
 - `setSticky`
+- `evaluateFlag`
 - `isEnabled`
+- `evaluateVariation`
 - `getVariation`
+- `evaluateVariable`
 - `getVariable`
 - `getVariableBoolean`
 - `getVariableString`
@@ -761,6 +776,121 @@ $ vendor/bin/featurevisor assess-distribution \
     --n=1000
 ```
 
+## OpenFeature
+
+The provider targets OpenFeature PHP SDK `2.x`. OpenFeature remains optional and is not installed or loaded by the base Featurevisor SDK.
+
+### Installation
+
+```bash
+composer require featurevisor/featurevisor-php open-feature/sdk:^2.2
+```
+
+### Provider setup
+
+```php
+use Featurevisor\OpenFeatureProvider;
+use OpenFeature\OpenFeatureAPI;
+use OpenFeature\implementation\flags\Attributes;
+use OpenFeature\implementation\flags\EvaluationContext;
+
+$provider = new OpenFeatureProvider([
+    'datafile' => $datafileContent,
+]);
+
+$api = OpenFeatureAPI::getInstance();
+$api->setProvider($provider);
+
+$client = $api->getClient();
+$enabled = $client->getBooleanValue(
+    'checkout',
+    false,
+    new EvaluationContext('user-123', new Attributes(['country' => 'nl']))
+);
+```
+
+The current OpenFeature PHP SDK does not expose provider shutdown through its API. Call `$provider->shutdown()` when your application shuts down. This closes a Featurevisor instance created by the provider and releases provider subscriptions.
+
+### Flag key mapping
+
+| OpenFeature key | Featurevisor evaluation |
+| --- | --- |
+| `checkout` | Boolean flag for `checkout` |
+| `checkout:variation` | Variation value for `checkout` |
+| `checkout:title` | Variable `title` for `checkout` |
+
+Boolean variables use the boolean resolver. Integer and double variables use their matching numeric resolvers. Arrays, objects, and JSON variables use the object resolver.
+
+The first separator divides the feature key from the selector. Use `keySeparator` and `variationKey` when project keys require a different grammar:
+
+```php
+$provider = new OpenFeatureProvider(
+    options: ['datafile' => $datafileContent],
+    keySeparator: '/',
+    variationKey: '$variation'
+);
+```
+
+This makes `checkout/$variation` the variation key and `checkout/title` a variable key.
+
+### Context mapping
+
+OpenFeature's targeting key maps to `userId` by default. Use `targetingKeyField` to map it to another Featurevisor context field:
+
+```php
+$provider = new OpenFeatureProvider(
+    options: ['datafile' => $datafileContent],
+    targetingKeyField: 'accountId'
+);
+```
+
+OpenFeature context attributes are copied without mutating the incoming context. Nested arrays are preserved. Dates are normalized to UTC ISO strings with millisecond precision, matching the JavaScript provider.
+
+### Resolution details
+
+The provider maps Featurevisor evaluation results to OpenFeature details:
+
+| Featurevisor result | OpenFeature result |
+| --- | --- |
+| Required, forced, sticky, or rule match | `TARGETING_MATCH` |
+| Traffic allocation | `SPLIT` |
+| Disabled variation or variable | `DISABLED` |
+| No match or variable default | `DEFAULT` |
+| Missing feature, variable, or variations | `ERROR` with `FLAG_NOT_FOUND` |
+| Wrong resolver type | `ERROR` with `TYPE_MISMATCH` |
+| Invalid datafile | `ERROR` with `PARSE_ERROR` |
+| Evaluation failure | `ERROR` with `GENERAL` |
+
+Errors return the default value supplied to OpenFeature. A malformed datafile uses the stable message `Could not parse datafile`. A later successful `setDatafile()` call clears the parse error.
+
+Selected Featurevisor variations are exposed as the OpenFeature variant when available. OpenFeature PHP SDK 2.x does not expose flag metadata in resolution details, so Featurevisor metadata such as revision, rule key, and bucket value cannot currently be returned by this provider.
+
+### Tracking
+
+Tracking is a no-op unless `onTrack` is configured:
+
+```php
+$provider = new OpenFeatureProvider(
+    options: ['datafile' => $datafileContent],
+    onTrack: function ($name, $context, $details) {
+        echo $name;
+    }
+);
+```
+
+### Using an existing Featurevisor instance
+
+You can reuse an existing Featurevisor instance:
+
+```php
+$featurevisor = Featurevisor::createFeaturevisor(['datafile' => $datafileContent]);
+$provider = new OpenFeatureProvider(featurevisor: $featurevisor);
+```
+
+The caller owns an instance passed this way. Calling `$provider->shutdown()` does not close it. Call `$featurevisor->close()` when every consumer is finished with it. When the provider creates the instance from options, the provider owns and closes it. If both are supplied, `$featurevisor` takes precedence over `$options`. Shutdown is safe to call more than once.
+
+See the [OpenFeature provider guide](https://featurevisor.com/docs/sdks/openfeature/) for resolution reasons, errors, lifecycle, and providers for other languages.
+
 <!-- FEATUREVISOR_DOCS_END -->
 
 ## Development of this package
@@ -779,6 +909,14 @@ $ composer install
 $ composer test
 ```
 
+Run the complete local release check with:
+
+```
+$ make check
+```
+
+The OpenFeature and base SDK tests can also be run separately with `make test-openfeature` and `make test-base`.
+
 To run the SDK against Featurevisor example-1 from the local monorepo checkout:
 
 ```
@@ -788,8 +926,8 @@ $ make test-example-1
 ### Releasing
 
 - Manually create a new release on [GitHub](https://github.com/featurevisor/featurevisor-php/releases)
-- Tag it with a prefix of `v`, like `v1.0.0`
-- GitHub Actions is set up to automatically notify [Packagist](https://packagist.org/packages/featurevisor/featurevisor-php) about the new release
+- Tag it with a prefix of `v`, like `v2.0.0`
+- The Packagist workflow notifies [Packagist](https://packagist.org/packages/featurevisor/featurevisor-php) after the tag is pushed
 
 ## License
 

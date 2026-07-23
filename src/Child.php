@@ -8,6 +8,8 @@ class Child
     private array $context;
     private array $sticky;
     private Emitter $emitter;
+    /** @var array<int, callable> */
+    private array $parentUnsubscribers = [];
 
     public function __construct(array $options)
     {
@@ -23,11 +25,34 @@ class Child
             return $this->emitter->on($eventName, $callback);
         }
 
-        return $this->parent->on($eventName, $callback);
+        $parentUnsubscribe = $this->parent->on($eventName, $callback);
+        $active = true;
+        $unsubscribe = null;
+        $unsubscribe = function () use (&$active, &$unsubscribe, $parentUnsubscribe): void {
+            if (!$active) {
+                return;
+            }
+
+            $active = false;
+            $parentUnsubscribe();
+            foreach ($this->parentUnsubscribers as $index => $candidate) {
+                if ($candidate === $unsubscribe) {
+                    unset($this->parentUnsubscribers[$index]);
+                    break;
+                }
+            }
+        };
+        $this->parentUnsubscribers[] = $unsubscribe;
+
+        return $unsubscribe;
     }
 
     public function close(): void
     {
+        foreach (array_values($this->parentUnsubscribers) as $unsubscribe) {
+            $unsubscribe();
+        }
+        $this->parentUnsubscribers = [];
         $this->emitter->clearAll();
     }
 
@@ -74,6 +99,15 @@ class Child
         );
     }
 
+    public function evaluateFlag(string $featureKey, array $context = [], array $options = []): array
+    {
+        return $this->parent->evaluateFlag(
+            $featureKey,
+            array_merge($this->context, $context),
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
+        );
+    }
+
     public function getVariation(string $featureKey, array $context = [], array $options = [])
     {
         return $this->parent->getVariation(
@@ -83,9 +117,28 @@ class Child
         );
     }
 
+    public function evaluateVariation(string $featureKey, array $context = [], array $options = []): array
+    {
+        return $this->parent->evaluateVariation(
+            $featureKey,
+            array_merge($this->context, $context),
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
+        );
+    }
+
     public function getVariable(string $featureKey, string $variableKey, array $context = [], array $options = [])
     {
         return $this->parent->getVariable(
+            $featureKey,
+            $variableKey,
+            array_merge($this->context, $context),
+            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
+        );
+    }
+
+    public function evaluateVariable(string $featureKey, string $variableKey, array $context = [], array $options = []): array
+    {
+        return $this->parent->evaluateVariable(
             $featureKey,
             $variableKey,
             array_merge($this->context, $context),

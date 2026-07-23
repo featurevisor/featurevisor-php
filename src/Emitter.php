@@ -47,7 +47,7 @@ class Emitter
         foreach ($listeners as $listener) {
             try {
                 $listener($details);
-            } catch (\Exception $err) {
+            } catch (\Throwable $err) {
                 error_log($err->getMessage());
             }
         }

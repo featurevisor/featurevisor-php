@@ -29,15 +29,21 @@ class Helpers
                 case 'boolean':
                     return is_bool($value) ? $value : null;
                 case 'array':
-                    return is_array($value) ? $value : null;
+                    return is_array($value) && self::isList($value) ? $value : null;
                 case 'object':
-                    return is_array($value) || is_object($value) ? $value : null;
+                    return (is_array($value) && !self::isList($value)) || is_object($value) ? $value : null;
                 // @NOTE: `json` is not handled here intentionally
                 default:
                     return $value;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /** @param array<mixed> $value */
+    private static function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
     }
 }

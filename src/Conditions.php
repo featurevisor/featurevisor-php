@@ -2,189 +2,377 @@
 
 namespace Featurevisor;
 
-class Conditions
+final class Conditions
 {
-    // Helper to check if an array is sequential (not associative)
-    private static function isSequentialArray($array): bool
+    /** @param mixed $left @param mixed $right */
+    private static function primitiveEquals($left, $right): bool
     {
-        if (!is_array($array)) return false;
-        return array_keys($array) === range(0, count($array) - 1);
-    }
-
-    private static function pathExists(array $array, string $path): bool
-    {
-        if (strpos($path, '.') === false) {
-            return array_key_exists($path, $array);
+        if ((is_int($left) || is_float($left)) && (is_int($right) || is_float($right))) {
+            return (float) $left === (float) $right;
         }
 
-        $keys = explode('.', $path);
-        $current = $array;
+        if ($left === null || is_string($left) || is_bool($left)) {
+            return $left === $right;
+        }
 
-        foreach ($keys as $key) {
+        return false;
+    }
+
+    /** @param array<mixed> $value */
+    private static function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return mixed
+     */
+    public static function getValueFromContext(array $context, string $path)
+    {
+        $current = $context;
+
+        foreach (explode('.', $path) as $key) {
             if (!is_array($current) || !array_key_exists($key, $current)) {
-                return false;
-            }
-            $current = $current[$key];
-        }
-
-        return true;
-    }
-
-    public static function getValueFromContext(array $obj, string $path)
-    {
-        if (strpos($path, '.') === false) {
-            return $obj[$path] ?? null;
-        }
-
-        $keys = explode('.', $path);
-        $current = $obj;
-
-        foreach ($keys as $key) {
-            if (!is_array($current) || !isset($current[$key])) {
                 return null;
             }
+
             $current = $current[$key];
         }
 
         return $current;
     }
 
+    /** @param array<string, mixed> $context */
+    public static function pathExists(array $context, string $path): bool
+    {
+        $current = $context;
+
+        foreach (explode('.', $path) as $key) {
+            if (!is_array($current) || !array_key_exists($key, $current)) {
+                return false;
+            }
+
+            $current = $current[$key];
+        }
+
+        return true;
+    }
+
+    /**
+     * @param mixed $condition
+     * @param array<string, mixed> $context
+     */
     public static function conditionIsMatched($condition, array $context, callable $getRegex): bool
     {
-        // DEBUG: print condition and context
-        // var_dump(['condition' => $condition, 'context' => $context]);
-        // Match all via '*'
         if ($condition === '*') {
             return true;
         }
 
-        // If not array, cannot match
         if (!is_array($condition)) {
             return false;
-        }
-
-        // Logical operators
-        if (isset($condition['and'])) {
-            $andConditions = self::isSequentialArray($condition['and']) ? $condition['and'] : [$condition['and']];
-            foreach ($andConditions as $subCondition) {
-                if (!self::conditionIsMatched($subCondition, $context, $getRegex)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        if (isset($condition['or'])) {
-            $orConditions = self::isSequentialArray($condition['or']) ? $condition['or'] : [$condition['or']];
-            foreach ($orConditions as $subCondition) {
-                if (self::conditionIsMatched($subCondition, $context, $getRegex)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (isset($condition['not'])) {
-            if (is_array($condition['not']) && count($condition['not']) === 0) {
-                return false;
-            }
-            $notConditions = self::isSequentialArray($condition['not']) ? $condition['not'] : [$condition['not']];
-            // JS SDK semantics: "not" negates the entire AND group.
-            return !self::conditionIsMatched(['and' => $notConditions], $context, $getRegex);
         }
 
         $attribute = $condition['attribute'] ?? '';
         $operator = $condition['operator'] ?? '';
         $value = $condition['value'] ?? null;
-        $regexFlags = $condition['regexFlags'] ?? '';
-
-        $contextValueFromPath = self::getValueFromContext($context, $attribute);
+        $contextValue = self::getValueFromContext($context, $attribute);
 
         if ($operator === 'equals') {
-            return $contextValueFromPath === $value;
-        } elseif ($operator === 'notEquals') {
-            return $contextValueFromPath !== $value;
-        } elseif ($operator === 'before' || $operator === 'after') {
-            // date comparisons
-            $valueInContext = $contextValueFromPath;
+            return self::pathExists($context, $attribute) && self::primitiveEquals($contextValue, $value);
+        }
 
-            $dateInContext = is_string($valueInContext) ? new \DateTime($valueInContext) : $valueInContext;
-            $dateInCondition = is_string($value) ? new \DateTime($value) : $value;
+        if ($operator === 'notEquals') {
+            return !self::pathExists($context, $attribute) || !self::primitiveEquals($contextValue, $value);
+        }
 
-            return $operator === 'before'
-                ? $dateInContext < $dateInCondition
-                : $dateInContext > $dateInCondition;
-        } elseif (
-            is_array($value) &&
-            (is_string($contextValueFromPath) || is_numeric($contextValueFromPath) || $contextValueFromPath === null)
-        ) {
-            // in / notIn (where condition value is an array)
+        if ($operator === 'before' || $operator === 'after') {
+            $contextDate = self::portableDate($contextValue);
+            $conditionDate = self::portableDate($value);
+            if ($contextDate === null || $conditionDate === null) {
+                return false;
+            }
+
+            return $operator === 'before' ? $contextDate < $conditionDate : $contextDate > $conditionDate;
+        }
+
+        if (is_array($value) && (is_string($contextValue) || is_int($contextValue) || is_float($contextValue) || $contextValue === null)) {
             if (!self::pathExists($context, $attribute)) {
                 return false;
             }
-            $valueInContext = $contextValueFromPath;
 
             if ($operator === 'in') {
-                return in_array($valueInContext, $value);
-            } elseif ($operator === 'notIn') {
-                return !in_array($valueInContext, $value);
+                return count(array_filter($value, fn ($candidate) => self::primitiveEquals($candidate, $contextValue))) > 0;
             }
 
-        } elseif (is_string($contextValueFromPath) && is_string($value)) {
-            // string
-            $valueInContext = $contextValueFromPath;
+            if ($operator === 'notIn') {
+                return count(array_filter($value, fn ($candidate) => self::primitiveEquals($candidate, $contextValue))) === 0;
+            }
+        }
 
+        if (is_string($contextValue) && is_string($value)) {
             if ($operator === 'contains') {
-                return strpos($valueInContext, $value) !== false;
-            } elseif ($operator === 'notContains') {
-                return strpos($valueInContext, $value) === false;
-            } elseif ($operator === 'startsWith') {
-                return strpos($valueInContext, $value) === 0;
-            } elseif ($operator === 'endsWith') {
-                return substr($valueInContext, -strlen($value)) === $value;
-            } elseif ($operator === 'semverEquals') {
-                return CompareVersions::compare($valueInContext, $value) === 0;
-            } elseif ($operator === 'semverNotEquals') {
-                return CompareVersions::compare($valueInContext, $value) !== 0;
-            } elseif ($operator === 'semverGreaterThan') {
-                return CompareVersions::compare($valueInContext, $value) === 1;
-            } elseif ($operator === 'semverGreaterThanOrEquals') {
-                return CompareVersions::compare($valueInContext, $value) >= 0;
-            } elseif ($operator === 'semverLessThan') {
-                return CompareVersions::compare($valueInContext, $value) === -1;
-            } elseif ($operator === 'semverLessThanOrEquals') {
-                return CompareVersions::compare($valueInContext, $value) <= 0;
-            } elseif ($operator === 'matches') {
-                $regex = $getRegex($value, $regexFlags);
-                return preg_match($regex, $valueInContext);
-            } elseif ($operator === 'notMatches') {
-                $regex = $getRegex($value, $regexFlags);
-                return !preg_match($regex, $valueInContext);
+                return strpos($contextValue, $value) !== false;
             }
-        } elseif (is_numeric($contextValueFromPath) && is_numeric($value)) {
-            // numeric
-            $valueInContext = $contextValueFromPath;
+            if ($operator === 'notContains') {
+                return strpos($contextValue, $value) === false;
+            }
+            if ($operator === 'startsWith') {
+                return strpos($contextValue, $value) === 0;
+            }
+            if ($operator === 'endsWith') {
+                return $value === '' || substr($contextValue, -strlen($value)) === $value;
+            }
+            if ($operator === 'semverEquals') {
+                return CompareVersions::compare($contextValue, $value) === 0;
+            }
+            if ($operator === 'semverNotEquals') {
+                return CompareVersions::compare($contextValue, $value) !== 0;
+            }
+            if ($operator === 'semverGreaterThan') {
+                return CompareVersions::compare($contextValue, $value) === 1;
+            }
+            if ($operator === 'semverGreaterThanOrEquals') {
+                return CompareVersions::compare($contextValue, $value) >= 0;
+            }
+            if ($operator === 'semverLessThan') {
+                return CompareVersions::compare($contextValue, $value) === -1;
+            }
+            if ($operator === 'semverLessThanOrEquals') {
+                return CompareVersions::compare($contextValue, $value) <= 0;
+            }
+            if ($operator === 'matches' || $operator === 'notMatches') {
+                $result = @preg_match($getRegex($value, (string) ($condition['regexFlags'] ?? '')), $contextValue);
+                if ($result === false) {
+                    throw new \RuntimeException('Invalid regular expression');
+                }
 
+                return $operator === 'matches' ? $result === 1 : $result === 0;
+            }
+        }
+
+        if ((is_int($contextValue) || is_float($contextValue)) && (is_int($value) || is_float($value))) {
             if ($operator === 'greaterThan') {
-                return $valueInContext > $value;
-            } elseif ($operator === 'greaterThanOrEquals') {
-                return $valueInContext >= $value;
-            } elseif ($operator === 'lessThan') {
-                return $valueInContext < $value;
-            } elseif ($operator === 'lessThanOrEquals') {
-                return $valueInContext <= $value;
+                return $contextValue > $value;
             }
-        } elseif ($operator === 'exists') {
-            return self::pathExists($context, $attribute);
-        } elseif ($operator === 'notExists') {
-            return !self::pathExists($context, $attribute);
-        } elseif (is_array($contextValueFromPath) && is_string($value)) {
-            // includes / notIncludes (where context value is an array)
-            $valueInContext = $contextValueFromPath;
+            if ($operator === 'greaterThanOrEquals') {
+                return $contextValue >= $value;
+            }
+            if ($operator === 'lessThan') {
+                return $contextValue < $value;
+            }
+            if ($operator === 'lessThanOrEquals') {
+                return $contextValue <= $value;
+            }
+        }
 
+        if ($operator === 'exists') {
+            return self::pathExists($context, $attribute);
+        }
+        if ($operator === 'notExists') {
+            return !self::pathExists($context, $attribute);
+        }
+
+        if (is_array($contextValue) && (is_string($value) || is_int($value) || is_float($value) || is_bool($value) || $value === null)) {
             if ($operator === 'includes') {
-                return in_array($value, $valueInContext);
-            } elseif ($operator === 'notIncludes') {
-                return !in_array($value, $valueInContext);
+                return count(array_filter($contextValue, fn ($candidate) => self::primitiveEquals($candidate, $value))) > 0;
             }
+            if ($operator === 'notIncludes') {
+                return count(array_filter($contextValue, fn ($candidate) => self::primitiveEquals($candidate, $value))) === 0;
+            }
+        }
+
+        return false;
+    }
+
+    private static function portableDate($value): ?\DateTimeInterface
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value;
+        }
+        if (!is_string($value) || !preg_match('/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})$/', $value)) {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception $error) {
+            return null;
+        }
+    }
+
+    /**
+     * @param mixed $conditions
+     * @param array<string, mixed> $context
+     */
+    public static function allConditionsAreMatched($conditions, array $context, callable $getRegex, ?callable $reportDiagnostic = null): bool
+    {
+        if (is_string($conditions)) {
+            return $conditions === '*';
+        }
+
+        if (!is_array($conditions)) {
+            return false;
+        }
+
+        if (array_key_exists('attribute', $conditions)) {
+            try {
+                return self::conditionIsMatched($conditions, $context, $getRegex);
+            } catch (\Throwable $error) {
+                if ($reportDiagnostic) {
+                    $reportDiagnostic([
+                        'level' => 'warn',
+                        'code' => 'condition_match_error',
+                        'message' => $error->getMessage(),
+                        'originalError' => $error,
+                        'details' => ['condition' => $conditions, 'context' => $context],
+                    ]);
+                }
+
+                return false;
+            }
+        }
+
+        if (array_key_exists('and', $conditions) && is_array($conditions['and'])) {
+            foreach ($conditions['and'] as $condition) {
+                if (!self::allConditionsAreMatched($condition, $context, $getRegex, $reportDiagnostic)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (array_key_exists('or', $conditions) && is_array($conditions['or'])) {
+            foreach ($conditions['or'] as $condition) {
+                if (self::allConditionsAreMatched($condition, $context, $getRegex, $reportDiagnostic)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (array_key_exists('not', $conditions) && is_array($conditions['not'])) {
+            if ($conditions['not'] === []) {
+                return false;
+            }
+
+            return !self::allConditionsAreMatched(['and' => $conditions['not']], $context, $getRegex, $reportDiagnostic);
+        }
+
+        if (self::isList($conditions)) {
+            foreach ($conditions as $condition) {
+                if (!self::allConditionsAreMatched($condition, $context, $getRegex, $reportDiagnostic)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /** @param mixed $conditions @return mixed */
+    public static function parseConditionsIfStringified($conditions, ?callable $reportDiagnostic = null)
+    {
+        if (!is_string($conditions) || $conditions === '*') {
+            return $conditions;
+        }
+
+        try {
+            return json_decode($conditions, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $error) {
+            if ($reportDiagnostic) {
+                $reportDiagnostic([
+                    'level' => 'error',
+                    'code' => 'conditions_parse_error',
+                    'message' => 'Error parsing conditions',
+                    'originalError' => $error,
+                    'details' => ['conditions' => $conditions],
+                ]);
+            }
+
+            return $conditions;
+        }
+    }
+
+    /** @param mixed $segments @return mixed */
+    public static function parseSegmentsIfStringified($segments)
+    {
+        if (is_string($segments) && ($segments[0] ?? '') !== '{' && ($segments[0] ?? '') !== '[') {
+            return $segments;
+        }
+
+        return is_string($segments)
+            ? json_decode($segments, true, 512, JSON_THROW_ON_ERROR)
+            : $segments;
+    }
+
+    /**
+     * @param mixed $groupSegments
+     * @param array<string, mixed> $context
+     */
+    public static function allSegmentsAreMatched($groupSegments, array $context, callable $getSegment, callable $getRegex, ?callable $reportDiagnostic = null): bool
+    {
+        if ($groupSegments === '*') {
+            return true;
+        }
+
+        if (is_string($groupSegments)) {
+            $segment = $getSegment($groupSegments);
+
+            return $segment
+                ? self::allConditionsAreMatched(
+                    self::parseConditionsIfStringified($segment['conditions'], $reportDiagnostic),
+                    $context,
+                    $getRegex,
+                    $reportDiagnostic
+                )
+                : false;
+        }
+
+        if (!is_array($groupSegments)) {
+            return false;
+        }
+
+        if (array_key_exists('and', $groupSegments) && is_array($groupSegments['and'])) {
+            foreach ($groupSegments['and'] as $segment) {
+                if (!self::allSegmentsAreMatched($segment, $context, $getSegment, $getRegex, $reportDiagnostic)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (array_key_exists('or', $groupSegments) && is_array($groupSegments['or'])) {
+            foreach ($groupSegments['or'] as $segment) {
+                if (self::allSegmentsAreMatched($segment, $context, $getSegment, $getRegex, $reportDiagnostic)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (array_key_exists('not', $groupSegments) && is_array($groupSegments['not'])) {
+            if ($groupSegments['not'] === []) {
+                return false;
+            }
+
+            return !self::allSegmentsAreMatched(['and' => $groupSegments['not']], $context, $getSegment, $getRegex, $reportDiagnostic);
+        }
+
+        if (self::isList($groupSegments)) {
+            foreach ($groupSegments as $segment) {
+                if (!self::allSegmentsAreMatched($segment, $context, $getSegment, $getRegex, $reportDiagnostic)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         return false;

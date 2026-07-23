@@ -4,9 +4,7 @@
 require __DIR__ . '/vendor/autoload.php';
 
 use Featurevisor\Featurevisor;
-use Featurevisor\Internal\DatafileReader;
-use Featurevisor\Logger;
-use Psr\Log\LogLevel;
+use Featurevisor\Conditions;
 
 /**
  * CLI Options
@@ -227,12 +225,12 @@ function buildDatafiles(string $featurevisorProjectPath, array $config, array $t
     return $datafilesByKey;
 }
 
-function getLoggerLevel(array $cliOptions): string {
-    $level = LogLevel::WARNING;
+function getDiagnosticLevel(array $cliOptions): string {
+    $level = 'warn';
     if ($cliOptions['verbose'] === true) {
-        $level = LogLevel::DEBUG;
+        $level = 'debug';
     } else if ($cliOptions['quiet'] === true) {
-        $level = LogLevel::ERROR;
+        $level = 'error';
     }
     return $level;
 }
@@ -292,9 +290,11 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
 
     // Test expectedVariation
     if (isset($assertion["expectedVariation"])) {
-        $variation = $f->getVariation($featureKey, $context, [
-            'defaultVariationValue' => isset($assertion["defaultVariationValue"]) ? $assertion["defaultVariationValue"] : null,
-        ]);
+        $variationOptions = [];
+        if (array_key_exists("defaultVariationValue", $assertion)) {
+            $variationOptions["defaultVariationValue"] = $assertion["defaultVariationValue"];
+        }
+        $variation = $f->getVariation($featureKey, $context, $variationOptions);
         if ($variation !== $assertion["expectedVariation"]) {
             $hasError = true;
             $errors .= "      ✘ expectedVariation: expected " . json_encode($assertion["expectedVariation"]) . " but received " . json_encode($variation) . PHP_EOL;
@@ -310,11 +310,11 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
                 (stringEndsWith($expectedValue, '}') || stringEndsWith($expectedValue, ']'))) {
                 $expectedValue = json_decode($expectedValue, true);
             }
-            $actualValue = $f->getVariable($featureKey, $variableKey, $context, [
-                'defaultVariableValue' => isset($assertion["defaultVariableValues"]) && isset($assertion["defaultVariableValues"][$variableKey])
-                    ? $assertion["defaultVariableValues"][$variableKey]
-                    : null,
-            ]);
+            $variableOptions = [];
+            if (isset($assertion["defaultVariableValues"]) && array_key_exists($variableKey, $assertion["defaultVariableValues"])) {
+                $variableOptions["defaultVariableValue"] = $assertion["defaultVariableValues"][$variableKey];
+            }
+            $actualValue = $f->getVariable($featureKey, $variableKey, $context, $variableOptions);
             if ($actualValue !== $expectedValue) {
                 $hasError = true;
                 $errors .= "      ✘ expectedVariables.$variableKey: expected " . json_encode($expectedValue) . " but received " . json_encode($actualValue) . PHP_EOL;
@@ -337,9 +337,11 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
         }
 
         if (isset($expectedEvaluations["variation"])) {
-            $actualEvaluation = $f->evaluateVariation($featureKey, $context, [
-                'defaultVariationValue' => isset($assertion["defaultVariationValue"]) ? $assertion["defaultVariationValue"] : null,
-            ]);
+            $variationOptions = [];
+            if (array_key_exists("defaultVariationValue", $assertion)) {
+                $variationOptions["defaultVariationValue"] = $assertion["defaultVariationValue"];
+            }
+            $actualEvaluation = $f->evaluateVariation($featureKey, $context, $variationOptions);
             foreach ($expectedEvaluations["variation"] as $key => $expectedValue) {
                 if ($actualEvaluation[$key] !== $expectedValue) {
                     $hasError = true;
@@ -350,11 +352,11 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
 
         if (isset($expectedEvaluations["variables"])) {
             foreach ($expectedEvaluations["variables"] as $variableKey => $expectedEvaluation) {
-                $actualEvaluation = $f->evaluateVariable($featureKey, $variableKey, $context, [
-                    'defaultVariableValue' => isset($assertion["defaultVariableValues"]) && isset($assertion["defaultVariableValues"][$variableKey])
-                        ? $assertion["defaultVariableValues"][$variableKey]
-                        : null,
-                ]);
+                $variableOptions = [];
+                if (isset($assertion["defaultVariableValues"]) && array_key_exists($variableKey, $assertion["defaultVariableValues"])) {
+                    $variableOptions["defaultVariableValue"] = $assertion["defaultVariableValues"][$variableKey];
+                }
+                $actualEvaluation = $f->evaluateVariable($featureKey, $variableKey, $context, $variableOptions);
                 foreach ($expectedEvaluation as $key => $expectedValue) {
                     if ($actualEvaluation[$key] !== $expectedValue) {
                         $hasError = true;
@@ -388,30 +390,20 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
     ];
 }
 
-function testSegment(array $assertion, array $segment, string $level): array {
+function testSegment(array $assertion, array $segment): array {
     $context = isset($assertion["context"]) ? $assertion["context"] : [];
     $conditions = $segment["conditions"];
-
-    $datafile = [
-        'schemaVersion' => '2',
-        'revision' => 'tester',
-        'features' => [],
-        'segments' => []
-    ];
-
-    $datafileReader = DatafileReader::createFromOptions([
-        'datafile' => $datafile,
-        'logger' => Logger::create([
-            'level' => $level,
-        ]),
-    ]);
 
     $hasError = false;
     $errors = "";
     $startTime = microtime(true);
 
     if (isset($assertion["expectedToMatch"])) {
-        $actual = $datafileReader->allConditionsAreMatched($conditions, $context);
+        $actual = Conditions::allConditionsAreMatched(
+            $conditions,
+            $context,
+            static fn(string $pattern, string $flags): string => '~'.str_replace('~', '\\~', $pattern).'~'.str_replace(['g', 'y'], '', $flags)
+        );
         if ($actual !== $assertion["expectedToMatch"]) {
             $hasError = true;
             $errors .= "      ✘ expectedToMatch: expected " . json_encode($assertion["expectedToMatch"]) . " but received " . json_encode($actual) . PHP_EOL;
@@ -437,7 +429,7 @@ function test(array $cliOptions) {
 
     echo PHP_EOL;
 
-    $level = getLoggerLevel($cliOptions);
+    $level = getDiagnosticLevel($cliOptions);
     $tests = getTests($featurevisorProjectPath, $cliOptions);
 
     if (count($tests) === 0) {
@@ -481,9 +473,7 @@ function test(array $cliOptions) {
                 } else {
                     $f = Featurevisor::createFeaturevisor([
                         'datafile' => $datafile,
-                        'logger' => Logger::create([
-                          'level' => $level,
-                        ]),
+                        'logLevel' => $level,
                         'sticky' => $assertion['sticky'] ?? [],
                         'modules' => [
                             [
@@ -501,7 +491,7 @@ function test(array $cliOptions) {
                     $testResult = testFeature($assertion, $test["feature"], $f, $level);
                 }
             } else if (isset($test["segment"])) {
-                $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]], $level);
+                $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]]);
             }
 
             $testDuration += $testResult['duration'];
@@ -566,7 +556,7 @@ function benchmark(array $cliOptions) {
 
     $context = $cliOptions['context'] ? json_decode($cliOptions['context'], true) : [];
 
-    $level = getLoggerLevel($cliOptions);
+    $level = getDiagnosticLevel($cliOptions);
     $datafile = buildSingleDatafile(
         $featurevisorProjectPath,
         $cliOptions['environment'],
@@ -576,9 +566,7 @@ function benchmark(array $cliOptions) {
 
     $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
-        'logger' => Logger::create([
-          'level' => $level,
-        ]),
+        'logLevel' => $level,
     ]);
 
     $value = null;
@@ -657,13 +645,11 @@ function assessDistribution(array $cliOptions) {
     $populateUuid = $cliOptions['populateUuid'];
 
     $datafile = buildSingleDatafile($featurevisorProjectPath, $cliOptions['environment'], $cliOptions['targets'][0] ?? null, $cliOptions['inflate']);
-    $level = getLoggerLevel($cliOptions);
+    $level = getDiagnosticLevel($cliOptions);
 
     $f = Featurevisor::createFeaturevisor([
         'datafile' => $datafile,
-        'logger' => Logger::create([
-          'level' => $level,
-        ]),
+        'logLevel' => $level,
     ]);
 
     $value = null;
