@@ -24,6 +24,7 @@ final class OpenFeatureProvider extends AbstractProvider
     private string $targetingKeyField;
     private string $keySeparator;
     private string $variationKey;
+    private string $globalVariablePrefix;
     /** @var callable|null */
     private $onTrack;
     /** @var callable */
@@ -42,11 +43,16 @@ final class OpenFeatureProvider extends AbstractProvider
         string $targetingKeyField = 'userId',
         string $keySeparator = ':',
         string $variationKey = 'variation',
+        string $globalVariablePrefix = 'variable',
         ?callable $onTrack = null
     ) {
         $this->targetingKeyField = $targetingKeyField !== '' ? $targetingKeyField : 'userId';
         $this->keySeparator = $keySeparator !== '' ? $keySeparator : ':';
         $this->variationKey = $variationKey !== '' ? $variationKey : 'variation';
+        $this->globalVariablePrefix = $globalVariablePrefix !== '' ? $globalVariablePrefix : 'variable';
+        if (strpos($this->globalVariablePrefix, $this->keySeparator) !== false) {
+            throw new \InvalidArgumentException('globalVariablePrefix cannot contain keySeparator');
+        }
         $this->onTrack = $onTrack;
         $this->ownsFeaturevisor = $featurevisor === null;
         if ($featurevisor !== null) {
@@ -141,7 +147,14 @@ final class OpenFeatureProvider extends AbstractProvider
         $selector = $position === false ? null : substr($flagKey, $position + strlen($this->keySeparator));
         $context = $this->context($evaluationContext);
 
-        if ($selector === null || $selector === '') {
+        if ($featureKey === $this->globalVariablePrefix && $selector !== null && $selector !== '') {
+            $evaluation = $this->featurevisor->evaluateVariable($selector, $context);
+            $value = $evaluation['variableValue'] ?? null;
+            if (($evaluation['variable']['type'] ?? null) === 'json' && is_string($value)) {
+                $parsed = json_decode($value, true);
+                if (json_last_error() === JSON_ERROR_NONE) $value = $parsed;
+            }
+        } elseif ($selector === null || $selector === '') {
             if ($expectedType !== 'boolean') {
                 return $this->typeMismatch($flagKey, $defaultValue, $expectedType);
             }
@@ -196,7 +209,7 @@ final class OpenFeatureProvider extends AbstractProvider
     private function reason(string $reason): string
     {
         if (in_array($reason, ['feature_not_found', 'variable_not_found', 'no_variations', 'error'], true)) return Reason::ERROR;
-        if (in_array($reason, ['required', 'forced', 'sticky', 'rule', 'variable_override_variation', 'variable_override_rule'], true)) return Reason::TARGETING_MATCH;
+        if (in_array($reason, ['required', 'required_features_unmet', 'forced', 'sticky', 'rule', 'variable_override_variation', 'variable_override_rule'], true)) return Reason::TARGETING_MATCH;
         if ($reason === 'allocated') return Reason::SPLIT;
         if (in_array($reason, ['disabled', 'variation_disabled', 'variable_disabled'], true)) return Reason::DISABLED;
         return Reason::DEFAULT;
@@ -215,7 +228,11 @@ final class OpenFeatureProvider extends AbstractProvider
         if (($evaluation['error'] ?? null) instanceof \Throwable) return $evaluation['error']->getMessage();
         if (is_string($evaluation['error'] ?? null) && $evaluation['error'] !== '') return $evaluation['error'];
         if ($evaluation['reason'] === 'feature_not_found') return sprintf('Feature "%s" was not found', $evaluation['featureKey']);
-        if ($evaluation['reason'] === 'variable_not_found') return sprintf('Variable "%s" was not found for feature "%s"', $evaluation['variableKey'] ?? '', $evaluation['featureKey']);
+        if ($evaluation['reason'] === 'variable_not_found') {
+            return isset($evaluation['featureKey'])
+                ? sprintf('Variable "%s" was not found for feature "%s"', $evaluation['variableKey'] ?? '', $evaluation['featureKey'])
+                : sprintf('Global variable "%s" was not found', $evaluation['variableKey'] ?? '');
+        }
         if ($evaluation['reason'] === 'no_variations') return sprintf('Feature "%s" has no variations', $evaluation['featureKey']);
         return 'Featurevisor evaluation failed';
     }

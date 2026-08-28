@@ -191,7 +191,8 @@ $context = [
 
 $isEnabled = $f->isEnabled('my_feature', $context);
 $variation = $f->getVariation('my_feature', $context);
-$variableValue = $f->getVariable('my_feature', 'my_variable', $context);
+$featureVariable = $f->getVariable('my_feature', 'my_variable', $context);
+$globalVariable = $f->getVariable('supportEmail', $context);
 ```
 
 When manually passing context, it will merge with existing context set to the SDK instance before evaluating the specific value.
@@ -278,12 +279,23 @@ $f->getVariableJSON($featureKey, $variableKey, $context = []);
 
 Type specific methods do not coerce values. `getVariableInteger()` returns `null` for the string `"1"`, and boolean getters return `null` for non-boolean values.
 
+Global variables use the same methods without a feature key:
+
+```php
+$email = $f->getVariable('supportEmail', ['country' => 'nl']);
+$evaluation = $f->evaluateVariable('supportEmail', ['country' => 'nl']);
+$settings = $f->getVariableObject('checkoutSettings');
+```
+
+Global variables honour sticky values, required features, and the first matching override. When an override contains both conditions and segments, both must match.
+
 ## Getting all evaluations
 
 You can get evaluations of all features available in the SDK instance:
 
 ```php
-$allEvaluations = $f->getAllEvaluations($context = []);
+$allEvaluations = $f->getFeatureEvaluations($context = []);
+$globalVariables = $f->getVariableEvaluations($context = []);
 
 print_r($allEvaluations);
 // [
@@ -304,11 +316,13 @@ print_r($allEvaluations);
 
 This is handy especially when you want to pass all evaluations from a backend application to the frontend.
 
+`getAllEvaluations()` remains an alias for `getFeatureEvaluations()`.
+
 ## Sticky
 
 For the lifecycle of the SDK instance in your application, you can set some features with sticky values, meaning that they will not be evaluated against the fetched [datafile](https://featurevisor.com/docs/building-datafiles/):
 
-Sticky values belong to an SDK or child instance. Evaluation options do not accept sticky overrides; use `spawn($context, ['sticky' => ...])` when a child needs its own sticky state.
+Sticky values belong to an SDK or child instance. Evaluation options do not accept sticky overrides. Pass `stickyFeatures` or `stickyVariables` when a child needs its own state.
 
 ### Initialize with sticky
 
@@ -316,7 +330,7 @@ Sticky values belong to an SDK or child instance. Evaluation options do not acce
 use Featurevisor\Featurevisor;
 
 $f = Featurevisor::createFeaturevisor([
-  "sticky" => [
+  "stickyFeatures" => [
     "myFeatureKey" => [
       "enabled" => true,
 
@@ -331,6 +345,9 @@ $f = Featurevisor::createFeaturevisor([
       "enabled" => false,
     ],
   ],
+  "stickyVariables" => [
+    "supportEmail" => "sticky@example.com",
+  ],
 ]);
 ```
 
@@ -341,7 +358,7 @@ Once initialized with sticky features, the SDK will look for values there first 
 You can also set sticky features after the SDK is initialized:
 
 ```php
-$f->setSticky(
+$f->setStickyFeatures(
   [
     "myFeatureKey" => [
       "enabled" => true,
@@ -537,7 +554,13 @@ $evaluation = $f->evaluateVariation($featureKey, $context = []);
 $evaluation = $f->evaluateVariable($featureKey, $variableKey, $context = []);
 ```
 
-The returned object will always contain the following properties:
+For global variables, omit the feature key:
+
+```php
+$evaluation = $f->evaluateVariable('supportEmail', $context = []);
+```
+
+The returned object always contains `reason`. Feature evaluations also contain `featureKey`. Global variable evaluations contain `variableKey` without a `featureKey`.
 
 - `featureKey`: the feature key
 - `reason`: the reason how the value was evaluated
@@ -553,6 +576,9 @@ And optionally these properties depending on whether you are evaluating a featur
 - `variableKey`: the variable key
 - `variableValue`: the variable value
 - `variableSchema`: the variable schema
+- `variableOverrideKey`: the matched override key
+- `variableOverridePath`: the full path of a matched nested override
+- `variableOverrideIndex`: the flattened override index
 
 ## Modules
 
@@ -586,10 +612,10 @@ $myCustomModule = [
     ]);
   },
 
-  // before evaluation
-  'before' => function ($options) {
+  // before any feature or global variable evaluation
+  'beforeEvaluation' => function ($options) {
     $type = $options['type']; // `flag` | `variation` | `variable`
-    $featureKey = $options['featureKey'];
+    $featureKey = $options['featureKey'] ?? null;
     $variableKey = $options['variableKey']; // if type is `variable`
     $context = $options['context'];
 
@@ -601,8 +627,8 @@ $myCustomModule = [
     return $options;
   },
 
-  // after evaluation
-  'after' => function ($evaluation, $options) {
+  // after any feature or global variable evaluation
+  'afterEvaluation' => function ($evaluation, $options) {
     $reason = $evaluation['reason']; // `error` | `feature_not_found` | `variable_not_found` | ...
 
     if ($reason === "error") {
@@ -640,6 +666,8 @@ $myCustomModule = [
   },
 ];
 ```
+
+The older `before` and `after` callbacks remain available for feature evaluations only. Use `beforeEvaluation` and `afterEvaluation` for code that must also observe global variables.
 
 ### Registering modules
 
@@ -689,12 +717,15 @@ Now you can pass the child instance where your individual request is being handl
 $isEnabled = $childF->isEnabled('my_feature');
 $variation = $childF->getVariation('my_feature');
 $variableValue = $childF->getVariable('my_feature', 'my_variable');
+$globalVariableValue = $childF->getVariable('supportEmail');
 ```
 
 Similar to parent SDK, child instances also support several additional methods:
 
 - `setContext`
 - `setSticky`
+- `setStickyFeatures`
+- `setStickyVariables`
 - `evaluateFlag`
 - `isEnabled`
 - `evaluateVariation`
@@ -709,6 +740,8 @@ Similar to parent SDK, child instances also support several additional methods:
 - `getVariableObject`
 - `getVariableJSON`
 - `getAllEvaluations`
+- `getFeatureEvaluations`
+- `getVariableEvaluations`
 - `on`
 - `close`
 
@@ -807,6 +840,8 @@ $enabled = $client->getBooleanValue(
     false,
     new EvaluationContext('user-123', new Attributes(['country' => 'nl']))
 );
+
+$f->setStickyVariables(['supportEmail' => 'new@example.com']);
 ```
 
 The current OpenFeature PHP SDK does not expose provider shutdown through its API. Call `$provider->shutdown()` when your application shuts down. This closes a Featurevisor instance created by the provider and releases provider subscriptions.
@@ -818,6 +853,7 @@ The current OpenFeature PHP SDK does not expose provider shutdown through its AP
 | `checkout` | Boolean flag for `checkout` |
 | `checkout:variation` | Variation value for `checkout` |
 | `checkout:title` | Variable `title` for `checkout` |
+| `variable:supportEmail` | Global variable `supportEmail` |
 
 Boolean variables use the boolean resolver. Integer and double variables use their matching numeric resolvers. Arrays, objects, and JSON variables use the object resolver.
 
@@ -832,6 +868,17 @@ $provider = new OpenFeatureProvider(
 ```
 
 This makes `checkout/$variation` the variation key and `checkout/title` a variable key.
+
+Global variables use the `variable` prefix by default. Configure `globalVariablePrefix` when that word is already meaningful in your project:
+
+```php
+$provider = new OpenFeatureProvider(
+    options: ['datafile' => $datafileContent],
+    globalVariablePrefix: 'global'
+);
+```
+
+This maps `global:supportEmail` to the global variable `supportEmail`.
 
 ### Context mapping
 
@@ -891,6 +938,10 @@ The caller owns an instance passed this way. Calling `$provider->shutdown()` doe
 
 See the [OpenFeature provider guide](https://featurevisor.com/docs/sdks/openfeature/) for resolution reasons, errors, lifecycle, and providers for other languages.
 
+## Example application
+
+See a complete application using this SDK at [featurevisor-example-php](https://github.com/featurevisor/featurevisor-example-php).
+
 <!-- FEATUREVISOR_DOCS_END -->
 
 ## Development of this package
@@ -926,7 +977,7 @@ $ make test-example-1
 ### Releasing
 
 - Manually create a new release on [GitHub](https://github.com/featurevisor/featurevisor-php/releases)
-- Tag it with a prefix of `v`, like `v2.0.0`
+- Tag it with a prefix of `v`, like `v3.0.0`
 - The Packagist workflow notifies [Packagist](https://packagist.org/packages/featurevisor/featurevisor-php) after the tag is pushed
 
 ## License

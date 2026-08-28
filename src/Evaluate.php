@@ -13,6 +13,7 @@ class Evaluate
 
             // run before modules
             $options = $modulesManager->runBeforeModules($opts);
+            $options = $modulesManager->runBeforeEvaluationModules($options);
 
             // evaluate
             $evaluation = self::evaluate($options);
@@ -37,6 +38,7 @@ class Evaluate
             }
 
             // run after modules
+            $evaluation = $modulesManager->runAfterEvaluationModules($evaluation, $options);
             $evaluation = $modulesManager->runAfterModules($evaluation, $options);
 
             return $evaluation;
@@ -62,68 +64,46 @@ class Evaluate
     {
         $type = $options['type'];
         $featureKey = $options['featureKey'];
-        if ($type === 'flag' && isset($feature['required']) && count($feature['required']) > 0) {
-            $requiredFeaturesAreEnabled = true;
-
-            foreach ($feature['required'] as $required) {
-                $requiredKey = null;
-                $requiredVariation = null;
-
-                if (is_string($required)) {
-                    $requiredKey = $required;
-                } else {
-                    $requiredKey = $required['key'];
-                    $requiredVariation = $required['variation'] ?? null;
-                }
-
-                $requiredEvaluation = self::evaluate(array_merge($options, [
-                    'type' => 'flag',
-                    'featureKey' => $requiredKey
-                ]));
-                $requiredIsEnabled = $requiredEvaluation['enabled'] ?? false;
-
-                if (!$requiredIsEnabled) {
-                    $requiredFeaturesAreEnabled = false;
-                    break;
-                }
-
-                if ($requiredVariation !== null) {
-                    $requiredVariationEvaluation = self::evaluate(array_merge($options, [
-                        'type' => 'variation',
-                        'featureKey' => $requiredKey
-                    ]));
-
-                    $requiredVariationValue = null;
-
-                    if (isset($requiredVariationEvaluation['variationValue'])) {
-                        $requiredVariationValue = $requiredVariationEvaluation['variationValue'];
-                    } elseif (isset($requiredVariationEvaluation['variation']['value'])) {
-                        $requiredVariationValue = $requiredVariationEvaluation['variation']['value'];
-                    }
-
-                    if ($requiredVariationValue !== $requiredVariation) {
-                        $requiredFeaturesAreEnabled = false;
-                        break;
-                    }
-                }
-            }
-
-            if (!$requiredFeaturesAreEnabled) {
+        $requirements = $feature['requiredFeatures'] ?? ($feature['required'] ?? null);
+        if ($type === 'flag' && $requirements && !self::requiredFeaturesAreMatched($requirements, $options)) {
                 $evaluation = [
                     'type' => $type,
                     'featureKey' => $featureKey,
                     'reason' => Evaluation::REQUIRED,
-                    'required' => $feature['required'],
-                    'enabled' => $requiredFeaturesAreEnabled
+                    'required' => $feature['required'] ?? null,
+                    'requiredFeatures' => $feature['requiredFeatures'] ?? null,
+                    'enabled' => false
                 ];
 
                 Diagnostics::reportEvaluation($options, $evaluation, 'required features not enabled');
 
                 return $evaluation;
-            }
         }
 
         return null;
+    }
+
+    /** @param mixed $requirements */
+    public static function requiredFeaturesAreMatched($requirements, array $options): bool
+    {
+        if ($requirements === null) return true;
+        $isList = is_array($requirements) && ($requirements === [] || array_keys($requirements) === range(0, count($requirements) - 1));
+        $items = $isList ? $requirements : [$requirements];
+        $cleanOptions = $options;
+        unset($cleanOptions['type'], $cleanOptions['featureKey'], $cleanOptions['variableKey'], $cleanOptions['defaultVariationValue'], $cleanOptions['defaultVariableValue']);
+        foreach ($items as $required) {
+            $key = is_string($required) ? $required : ($required['feature'] ?? $required['key']);
+            $expectedEnabled = is_string($required) ? true : ($required['enabled'] ?? true);
+            $expectedVariation = is_string($required) ? null : ($required['variation'] ?? null);
+            $flag = self::evaluateWithModules(array_merge($cleanOptions, ['type' => 'flag', 'featureKey' => $key]));
+            if ((($flag['enabled'] ?? false) === true) !== $expectedEnabled) return false;
+            if ($expectedVariation !== null) {
+                $variation = self::evaluateWithModules(array_merge($cleanOptions, ['type' => 'variation', 'featureKey' => $key]));
+                $actual = $variation['variationValue'] ?? ($variation['variation']['value'] ?? null);
+                if ($actual !== $expectedVariation) return false;
+            }
+        }
+        return true;
     }
 
     public static function evaluate(array $options): array

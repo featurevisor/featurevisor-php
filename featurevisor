@@ -418,6 +418,33 @@ function testSegment(array $assertion, array $segment): array {
     ];
 }
 
+function testVariable(array $assertion, string $variableKey, Featurevisor $f): array {
+    $context = $assertion['context'] ?? [];
+    $options = [];
+    if (array_key_exists('defaultVariableValue', $assertion)) $options['defaultVariableValue'] = $assertion['defaultVariableValue'];
+    $hasError = false;
+    $errors = '';
+    $started = microtime(true);
+    if (array_key_exists('expectedValue', $assertion)) {
+        $actual = $f->getVariable($variableKey, $context, $options);
+        if ($actual !== $assertion['expectedValue']) {
+            $hasError = true;
+            $errors .= '      ✘ expectedValue: expected '.json_encode($assertion['expectedValue']).' but received '.json_encode($actual).PHP_EOL;
+        }
+    }
+    if (isset($assertion['expectedEvaluation'])) {
+        $evaluation = $f->evaluateVariable($variableKey, $context, $options);
+        foreach ($assertion['expectedEvaluation'] as $key => $expected) {
+            $actual = $evaluation[$key] ?? null;
+            if ($actual !== $expected) {
+                $hasError = true;
+                $errors .= "      ✘ expectedEvaluation.$key: expected ".json_encode($expected).' but received '.json_encode($actual).PHP_EOL;
+            }
+        }
+    }
+    return ['hasError' => $hasError, 'errors' => $errors, 'duration' => microtime(true) - $started];
+}
+
 function test(array $cliOptions) {
     $featurevisorProjectPath = $cliOptions['rootDirectoryPath'];
 
@@ -445,7 +472,7 @@ function test(array $cliOptions) {
     foreach ($tests as $test) {
         $testKey = $test['key'];
         $assertions = $test["assertions"];
-        if (isset($test['feature']) && count($cliOptions['targets']) > 0) {
+        if ((isset($test['feature']) || isset($test['variable'])) && count($cliOptions['targets']) > 0) {
             $assertions = array_values(array_filter($assertions, function ($assertion) use ($cliOptions) {
                 return !isset($assertion['target']) || in_array($assertion['target'], $cliOptions['targets'], true);
             }));
@@ -460,7 +487,7 @@ function test(array $cliOptions) {
         foreach ($assertions as $assertion) {
             $testResult = [];
 
-            if (isset($test["feature"])) {
+            if (isset($test["feature"]) || isset($test['variable'])) {
                 $environment = $assertion["environment"] ?? null;
                 $datafile = getDatafileForAssertion($assertion, $datafilesByKey);
 
@@ -474,7 +501,8 @@ function test(array $cliOptions) {
                     $f = Featurevisor::createFeaturevisor([
                         'datafile' => $datafile,
                         'logLevel' => $level,
-                        'sticky' => $assertion['sticky'] ?? [],
+                        'stickyFeatures' => $assertion['stickyFeatures'] ?? ($assertion['sticky'] ?? []),
+                        'stickyVariables' => $assertion['stickyVariables'] ?? [],
                         'modules' => [
                             [
                                 'name' => 'test-module',
@@ -488,7 +516,9 @@ function test(array $cliOptions) {
                         ]
                     ]);
 
-                    $testResult = testFeature($assertion, $test["feature"], $f, $level);
+                    $testResult = isset($test['feature'])
+                        ? testFeature($assertion, $test["feature"], $f, $level)
+                        : testVariable($assertion, $test['variable'], $f);
                 }
             } else if (isset($test["segment"])) {
                 $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]]);
@@ -540,8 +570,8 @@ function benchmark(array $cliOptions) {
         return;
     }
 
-    if ($cliOptions['feature'] === null) {
-        echo "Feature is required" . PHP_EOL;
+    if ($cliOptions['feature'] === null && $cliOptions['variable'] === null) {
+        echo "Feature or variable is required" . PHP_EOL;
         return;
     }
 
@@ -571,8 +601,9 @@ function benchmark(array $cliOptions) {
 
     $value = null;
 
-    echo PHP_EOL . "Benchmark Featurevisor feature" . PHP_EOL;
-    echo "  Feature: $cliOptions[feature]" . PHP_EOL;
+    echo PHP_EOL . ($cliOptions['feature'] === null ? "Benchmark Featurevisor global variable" : "Benchmark Featurevisor feature") . PHP_EOL;
+    if ($cliOptions['feature'] !== null) echo "  Feature: $cliOptions[feature]" . PHP_EOL;
+    if ($cliOptions['variable'] !== null) echo "  Variable: $cliOptions[variable]" . PHP_EOL;
     echo "  Environment: $cliOptions[environment]" . PHP_EOL;
     if (isset($cliOptions['targets'][0])) echo "  Target: " . $cliOptions['targets'][0] . PHP_EOL;
     echo "  Iterations: $cliOptions[n]" . PHP_EOL;
@@ -594,7 +625,9 @@ function benchmark(array $cliOptions) {
     $maxDuration = 0.0;
     for ($i = 0; $i < $cliOptions['n']; $i++) {
         $evaluationStartTime = hrtime(true);
-        if ($cliOptions['variation']) {
+        if ($cliOptions['variable'] && $cliOptions['feature'] === null) {
+            $value = $f->getVariable($cliOptions['variable'], $context);
+        } else if ($cliOptions['variation']) {
             $value = $f->getVariation($cliOptions['feature'], $context);
         } else if ($cliOptions['variable']) {
             $value = $f->getVariable($cliOptions['feature'], $cliOptions['variable'], $context);

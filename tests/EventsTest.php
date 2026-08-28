@@ -58,6 +58,7 @@ final class EventsTest extends TestCase
             'previousRevision' => '1',
             'revisionChanged' => true,
             'features' => ['feature1', 'feature2'],
+            'variables' => [],
             'replaced' => false,
         ], $result);
     }

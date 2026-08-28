@@ -13,11 +13,13 @@ class Featurevisor
         'revision' => 'unknown',
         'segments' => [],
         'features' => [],
+        'variables' => [],
     ];
 
     private array $context;
     private string $logLevel;
-    private ?array $sticky;
+    private ?array $stickyFeatures;
+    private ?array $stickyVariables;
     /** @var array<string, mixed> */
     private array $datafile;
     /** @var array<string, string> */
@@ -59,7 +61,8 @@ class Featurevisor
         $this->logLevel = $this->validateLogLevel($options['logLevel'] ?? self::DEFAULT_LOG_LEVEL);
         $this->emitter = new Emitter();
         $this->context = $options['context'] ?? [];
-        $this->sticky = $options['sticky'] ?? null;
+        $this->stickyFeatures = $options['stickyFeatures'] ?? ($options['sticky'] ?? null);
+        $this->stickyVariables = $options['stickyVariables'] ?? null;
         $this->onDiagnostic = $options['onDiagnostic'] ?? null;
         $this->moduleDiagnosticSubscriptions = [];
         $this->closed = false;
@@ -106,7 +109,8 @@ class Featurevisor
                 || !is_string($incomingDatafile['schemaVersion'] ?? null)
                 || !is_string($incomingDatafile['revision'] ?? null)
                 || !is_array($incomingDatafile['segments'] ?? null)
-                || !is_array($incomingDatafile['features'] ?? null)) {
+                || !is_array($incomingDatafile['features'] ?? null)
+                || (isset($incomingDatafile['variables']) && !is_array($incomingDatafile['variables']))) {
                 throw new \InvalidArgumentException('Invalid datafile');
             }
             $storedDatafile = $replace
@@ -140,19 +144,24 @@ class Featurevisor
      */
     public function setSticky(array $sticky, bool $replace = false): void
     {
+        $this->setStickyFeatures($sticky, $replace);
+    }
+
+    public function setStickyFeatures(array $sticky, bool $replace = false): void
+    {
         if ($this->closed) {
             return;
         }
 
-        $previousStickyFeatures = $this->sticky ?? [];
+        $previousStickyFeatures = $this->stickyFeatures ?? [];
 
         if ($replace) {
-            $this->sticky = $sticky;
+            $this->stickyFeatures = $sticky;
         } else {
-            $this->sticky = array_merge($this->sticky ?? [], $sticky);
+            $this->stickyFeatures = array_merge($this->stickyFeatures ?? [], $sticky);
         }
 
-        $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->sticky, $replace);
+        $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->stickyFeatures, $replace);
 
         $this->reportDiagnostic([
             'level' => 'info',
@@ -161,6 +170,17 @@ class Featurevisor
             'details' => $params,
         ]);
         $this->emitter->trigger('sticky_set', $params);
+        $this->emitter->trigger('sticky_features_set', $params);
+    }
+
+    public function setStickyVariables(array $sticky, bool $replace = false): void
+    {
+        if ($this->closed) return;
+        $previous = $this->stickyVariables ?? [];
+        $this->stickyVariables = $replace ? $sticky : array_merge($previous, $sticky);
+        $params = Events::getParamsForStickyVariablesSetEvent($previous, $this->stickyVariables, $replace);
+        $this->reportDiagnostic(['level' => 'info', 'code' => 'sticky_variables_set', 'message' => 'Sticky variables set', 'details' => $params]);
+        $this->emitter->trigger('sticky_variables_set', $params);
     }
 
     public function getRevision(): string
@@ -195,8 +215,9 @@ class Featurevisor
         return array_keys($this->datafile['features']);
     }
 
-    public function getVariableKeys(string $featureKey): array
+    public function getVariableKeys(?string $featureKey = null): array
     {
+        if ($featureKey === null) return array_keys($this->datafile['variables'] ?? []);
         $feature = $this->getFeature($featureKey);
 
         return $feature ? array_keys($feature['variablesSchema'] ?? []) : [];
@@ -214,6 +235,12 @@ class Featurevisor
         $feature = $this->datafile['features'][$featureKey] ?? null;
 
         return is_array($feature) ? $feature : null;
+    }
+
+    private function getGlobalVariable(string $variableKey): ?array
+    {
+        $variable = $this->datafile['variables'][$variableKey] ?? null;
+        return is_array($variable) ? $variable : null;
     }
 
     public function setLogLevel(string $level): void
@@ -400,6 +427,7 @@ class Featurevisor
             'revision' => $incoming['revision'],
             'segments' => array_merge($previous['segments'] ?? [], $incoming['segments'] ?? []),
             'features' => array_merge($previous['features'] ?? [], $incoming['features'] ?? []),
+            'variables' => array_merge($previous['variables'] ?? [], $incoming['variables'] ?? []),
         ];
 
         if (array_key_exists('featurevisorVersion', $incoming)) {
@@ -461,7 +489,8 @@ class Featurevisor
         return new Child([
             'parent' => $this,
             'context' => $this->getContext($context),
-            'sticky' => $options['sticky'] ?? null
+            'stickyFeatures' => $options['stickyFeatures'] ?? ($options['sticky'] ?? null),
+            'stickyVariables' => $options['stickyVariables'] ?? null,
         ]);
     }
 
@@ -586,9 +615,9 @@ class Featurevisor
      */
     private function getEvaluationDependencies(array $context, array $options = []): array
     {
-        $sticky = array_key_exists('__featurevisorChildSticky', $options)
-            ? $options['__featurevisorChildSticky']
-            : $this->sticky;
+        $sticky = array_key_exists('__featurevisorChildStickyFeatures', $options)
+            ? $options['__featurevisorChildStickyFeatures']
+            : $this->stickyFeatures;
         $datafile = [
             'getFeature' => function (string $featureKey): ?array {
                 return $this->getFeature($featureKey);
@@ -617,6 +646,7 @@ class Featurevisor
             },
             'modulesManager' => $this->modulesManager,
             'datafile' => $datafile,
+            'stickyFeatures' => $sticky,
             'sticky' => $sticky,
         ];
 
@@ -731,42 +761,125 @@ class Featurevisor
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param string|array<string, mixed>|null $variableKeyOrContext
+     * @param array<string, mixed> $contextOrOptions
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      * } $options
      * @return array<string, mixed>
      */
-    public function evaluateVariable(string $featureKey, string $variableKey, array $context = [], array $options = []): array
+    public function evaluateVariable(string $featureOrVariableKey, string|array|null $variableKeyOrContext = null, array $contextOrOptions = [], array $options = []): array
     {
-        $deps = $this->getEvaluationDependencies($context, $options);
+        if (!is_string($variableKeyOrContext)) {
+            return $this->evaluateGlobalVariable($featureOrVariableKey, $variableKeyOrContext ?? [], $contextOrOptions);
+        }
+        $deps = $this->getEvaluationDependencies($contextOrOptions, $options);
 
         return Evaluate::evaluateWithModules(array_merge($deps, [
             'type' => 'variable',
-            'featureKey' => $featureKey,
-            'variableKey' => $variableKey
+            'featureKey' => $featureOrVariableKey,
+            'variableKey' => $variableKeyOrContext
         ]));
     }
 
+    /** @param mixed $requirements */
+    private function requiredFeaturesAreMatched($requirements, array $context, array $options): bool
+    {
+        if ($requirements === null) return true;
+        $isList = is_array($requirements) && ($requirements === [] || array_keys($requirements) === range(0, count($requirements) - 1));
+        $items = $isList ? $requirements : [$requirements];
+        unset($options['defaultVariationValue'], $options['defaultVariableValue']);
+        foreach ($items as $required) {
+            $key = is_string($required) ? $required : $required['feature'];
+            $enabled = is_string($required) ? true : ($required['enabled'] ?? true);
+            $variation = is_string($required) ? null : ($required['variation'] ?? null);
+            if ($this->isEnabled($key, $context, $options) !== $enabled) return false;
+            if ($variation !== null && $this->getVariation($key, $context, $options) !== $variation) return false;
+        }
+        return true;
+    }
+
+    private function evaluateGlobalVariable(string $variableKey, array $context = [], array $options = []): array
+    {
+        $evaluationOptions = ['type' => 'variable', 'variableKey' => $variableKey, 'context' => $this->getContext($context)];
+        if (array_key_exists('defaultVariableValue', $options)) $evaluationOptions['defaultVariableValue'] = $options['defaultVariableValue'];
+        try {
+            $evaluationOptions = $this->modulesManager->runBeforeEvaluationModules($evaluationOptions);
+            $resolvedKey = $evaluationOptions['variableKey'];
+            $resolvedContext = $evaluationOptions['context'];
+            $variable = $this->getGlobalVariable($resolvedKey);
+            $evaluation = ['type' => 'variable', 'variableKey' => $resolvedKey, 'reason' => Evaluation::VARIABLE_NOT_FOUND];
+            $sticky = $options['__featurevisorChildStickyVariables'] ?? ($this->stickyVariables ?? []);
+
+            if (array_key_exists($resolvedKey, $sticky)) {
+                $evaluation = array_merge($evaluation, ['reason' => Evaluation::STICKY, 'variable' => $variable, 'variableValue' => $sticky[$resolvedKey]]);
+            } elseif ($variable) {
+                if (!$this->requiredFeaturesAreMatched($variable['requiredFeatures'] ?? null, $resolvedContext, $options)) {
+                    $evaluation = array_merge($evaluation, ['reason' => 'required_features_unmet', 'variable' => $variable]);
+                    $valueKey = !empty($variable['useDefaultWhenDisabled']) ? 'defaultValue' : 'disabledValue';
+                    if (array_key_exists($valueKey, $variable)) $evaluation['variableValue'] = $variable[$valueKey];
+                } else {
+                    foreach ($variable['overrides'] ?? [] as $index => $override) {
+                        if (!$this->requiredFeaturesAreMatched($override['requiredFeatures'] ?? null, $resolvedContext, $options)) continue;
+                        $conditionsMatch = !isset($override['conditions']) || $this->allConditionsAreMatched(
+                            Conditions::parseConditionsIfStringified($override['conditions'], fn(array $d) => $this->reportDiagnostic($d)),
+                            $resolvedContext
+                        );
+                        $segmentsMatch = !isset($override['segments']) || $this->allSegmentsAreMatched(
+                            Conditions::parseSegmentsIfStringified($override['segments']), $resolvedContext
+                        );
+                        if ($conditionsMatch && $segmentsMatch) {
+                            $evaluation = array_merge($evaluation, [
+                                'reason' => Evaluation::VARIABLE_OVERRIDE_RULE,
+                                'variable' => $variable,
+                                'variableValue' => $override['value'] ?? null,
+                                'variableOverrideIndex' => $index,
+                            ]);
+                            if (isset($override['key'])) $evaluation['variableOverrideKey'] = $override['key'];
+                            if (isset($override['keyPath'])) $evaluation['variableOverridePath'] = $override['keyPath'];
+                            break;
+                        }
+                    }
+                    if ($evaluation['reason'] === Evaluation::VARIABLE_NOT_FOUND) {
+                        $evaluation = array_merge($evaluation, ['reason' => Evaluation::VARIABLE_DEFAULT, 'variable' => $variable]);
+                        if (array_key_exists('defaultValue', $variable)) $evaluation['variableValue'] = $variable['defaultValue'];
+                    }
+                }
+                if (!empty($variable['deprecated'])) {
+                    $this->reportDiagnostic(['level' => 'warn', 'code' => 'variable_deprecated', 'message' => 'Variable "'.$resolvedKey.'" is deprecated', 'details' => ['variableKey' => $resolvedKey, 'evaluation' => $evaluation]]);
+                }
+            }
+            if (!array_key_exists('variableValue', $evaluation) && array_key_exists('defaultVariableValue', $options)) {
+                $evaluation['variableValue'] = $options['defaultVariableValue'];
+            }
+            $evaluation = $this->modulesManager->runAfterEvaluationModules($evaluation, $evaluationOptions);
+            $this->reportDiagnostic(['level' => 'debug', 'code' => $evaluation['reason'], 'message' => 'Global variable evaluated', 'details' => $evaluation]);
+            return $evaluation;
+        } catch (\Throwable $error) {
+            $evaluation = ['type' => 'variable', 'variableKey' => $variableKey, 'reason' => Evaluation::ERROR, 'error' => $error];
+            $this->reportDiagnostic(['level' => 'error', 'code' => 'evaluation_error', 'message' => 'Global variable evaluation failed', 'originalError' => $error, 'details' => $evaluation]);
+            return $evaluation;
+        }
+    }
+
     /**
-     * @param array<string, mixed> $context
+     * @param string|array<string, mixed>|null $variableKeyOrContext
+     * @param array<string, mixed> $contextOrOptions
      * @param array{
      *     defaultVariationValue?: mixed,
      *     defaultVariableValue?: mixed,
      * } $options
      * @return mixed|null
      */
-    public function getVariable(string $featureKey, string $variableKey, array $context = [], array $options = [])
+    public function getVariable(string $featureOrVariableKey, string|array|null $variableKeyOrContext = null, array $contextOrOptions = [], array $options = [])
     {
         try {
-            $evaluation = $this->evaluateVariable($featureKey, $variableKey, $context, $options);
+            $evaluation = $this->evaluateVariable($featureOrVariableKey, $variableKeyOrContext, $contextOrOptions, $options);
 
             if (array_key_exists('variableValue', $evaluation)) {
                 if (
-                    isset($evaluation['variableSchema']) &&
-                    isset($evaluation['variableSchema']['type']) &&
-                    $evaluation['variableSchema']['type'] === 'json' &&
+                    (($evaluation['variableSchema']['type'] ?? null) === 'json' || ($evaluation['variable']['type'] ?? null) === 'json') &&
                     is_string($evaluation['variableValue'])
                 ) {
                     return json_decode($evaluation['variableValue'], true, 512, JSON_THROW_ON_ERROR);
@@ -782,8 +895,7 @@ class Featurevisor
                 'originalError' => $e,
                 'details' => [
                     'action' => 'getVariable',
-                    'featureKey' => $featureKey,
-                    'variableKey' => $variableKey,
+                    'variableKey' => $featureOrVariableKey,
                 ],
             ]);
             return null;
@@ -797,7 +909,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
+    public function getVariableBoolean(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = []): ?bool
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'boolean');
@@ -810,7 +922,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
+    public function getVariableString(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = []): ?string
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'string');
@@ -823,7 +935,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
+    public function getVariableInteger(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = []): ?int
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'integer');
@@ -836,7 +948,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
+    public function getVariableDouble(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = []): ?float
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'double');
@@ -849,7 +961,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
+    public function getVariableArray(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = []): ?array
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'array');
@@ -862,7 +974,7 @@ class Featurevisor
      *     defaultVariableValue?: mixed,
      * } $options
      */
-    public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
+    public function getVariableObject(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = [])
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
         return Helpers::getValueByType($value, 'object');
@@ -876,7 +988,7 @@ class Featurevisor
      * } $options
      * @return array<mixed>|mixed|null
      */
-    public function getVariableJSON(string $featureKey, string $variableKey, array $context = [], array $options = [])
+    public function getVariableJSON(string $featureKey, string|array|null $variableKey = null, array $context = [], array $options = [])
     {
         $value = $this->getVariable($featureKey, $variableKey, $context, $options);
 
@@ -892,7 +1004,7 @@ class Featurevisor
      * } $options
      * @return array<string, mixed>
      */
-    public function getAllEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
+    public function getFeatureEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
     {
         $evaluations = [];
         if (empty($featureKeys)) {
@@ -922,5 +1034,21 @@ class Featurevisor
             $evaluations[$featureKey] = $evaluatedFeature;
         }
         return $evaluations;
+    }
+
+    public function getVariableEvaluations(array $context = [], array $variableKeys = [], array $options = []): array
+    {
+        if ($variableKeys === []) $variableKeys = $this->getVariableKeys();
+        $evaluations = [];
+        foreach ($variableKeys as $variableKey) {
+            $evaluations[$variableKey] = $this->getVariable($variableKey, $context, $options);
+        }
+        return $evaluations;
+    }
+
+    /** @deprecated Use getFeatureEvaluations(). */
+    public function getAllEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
+    {
+        return $this->getFeatureEvaluations($context, $featureKeys, $options);
     }
 }

@@ -4,9 +4,10 @@ namespace Featurevisor;
 
 class Child
 {
-    private $parent;
+    private Featurevisor $parent;
     private array $context;
-    private array $sticky;
+    private array $stickyFeatures;
+    private array $stickyVariables;
     private Emitter $emitter;
     /** @var array<int, callable> */
     private array $parentUnsubscribers = [];
@@ -15,59 +16,42 @@ class Child
     {
         $this->parent = $options['parent'];
         $this->context = $options['context'];
-        $this->sticky = $options['sticky'] ?? [];
+        $this->stickyFeatures = $options['stickyFeatures'] ?? ($options['sticky'] ?? []);
+        $this->stickyVariables = $options['stickyVariables'] ?? [];
         $this->emitter = new Emitter();
     }
 
     public function on(string $eventName, callable $callback): callable
     {
-        if ($eventName === 'context_set' || $eventName === 'sticky_set') {
+        if (in_array($eventName, ['context_set', 'sticky_set', 'sticky_features_set', 'sticky_variables_set'], true)) {
             return $this->emitter->on($eventName, $callback);
         }
-
         $parentUnsubscribe = $this->parent->on($eventName, $callback);
         $active = true;
         $unsubscribe = null;
         $unsubscribe = function () use (&$active, &$unsubscribe, $parentUnsubscribe): void {
-            if (!$active) {
-                return;
-            }
-
+            if (!$active) return;
             $active = false;
             $parentUnsubscribe();
             foreach ($this->parentUnsubscribers as $index => $candidate) {
-                if ($candidate === $unsubscribe) {
-                    unset($this->parentUnsubscribers[$index]);
-                    break;
-                }
+                if ($candidate === $unsubscribe) unset($this->parentUnsubscribers[$index]);
             }
         };
         $this->parentUnsubscribers[] = $unsubscribe;
-
         return $unsubscribe;
     }
 
     public function close(): void
     {
-        foreach (array_values($this->parentUnsubscribers) as $unsubscribe) {
-            $unsubscribe();
-        }
+        foreach (array_values($this->parentUnsubscribers) as $unsubscribe) $unsubscribe();
         $this->parentUnsubscribers = [];
         $this->emitter->clearAll();
     }
 
     public function setContext(array $context, bool $replace = false): void
     {
-        if ($replace) {
-            $this->context = $context;
-        } else {
-            $this->context = array_merge($this->context, $context);
-        }
-
-        $this->emitter->trigger('context_set', [
-            'context' => $this->context,
-            'replaced' => $replace
-        ]);
+        $this->context = $replace ? $context : array_merge($this->context, $context);
+        $this->emitter->trigger('context_set', ['context' => $this->context, 'replaced' => $replace]);
     }
 
     public function getContext(array $context = []): array
@@ -75,153 +59,52 @@ class Child
         return $this->parent->getContext(array_merge($this->context, $context));
     }
 
-    public function setSticky(array $sticky, bool $replace = false): void
+    public function setSticky(array $sticky, bool $replace = false): void { $this->setStickyFeatures($sticky, $replace); }
+    public function setStickyFeatures(array $sticky, bool $replace = false): void
     {
-        $previousStickyFeatures = $this->sticky;
-
-        if ($replace) {
-            $this->sticky = $sticky;
-        } else {
-            $this->sticky = array_merge($this->sticky, $sticky);
-        }
-
-        $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->sticky, $replace);
-
+        $previous = $this->stickyFeatures;
+        $this->stickyFeatures = $replace ? $sticky : array_merge($this->stickyFeatures, $sticky);
+        $params = Events::getParamsForStickySetEvent($previous, $this->stickyFeatures, $replace);
         $this->emitter->trigger('sticky_set', $params);
+        $this->emitter->trigger('sticky_features_set', $params);
+    }
+    public function setStickyVariables(array $sticky, bool $replace = false): void
+    {
+        $previous = $this->stickyVariables;
+        $this->stickyVariables = $replace ? $sticky : array_merge($this->stickyVariables, $sticky);
+        $this->emitter->trigger('sticky_variables_set', Events::getParamsForStickyVariablesSetEvent($previous, $this->stickyVariables, $replace));
     }
 
-    public function isEnabled(string $featureKey, array $context = [], array $options = []): bool
+    private function context(array $context): array { return array_merge($this->context, $context); }
+    private function options(array $options): array
     {
-        return $this->parent->isEnabled(
-            $featureKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
+        return array_merge($options, [
+            '__featurevisorChildStickyFeatures' => $this->stickyFeatures,
+            '__featurevisorChildStickyVariables' => $this->stickyVariables,
+        ]);
     }
 
-    public function evaluateFlag(string $featureKey, array $context = [], array $options = []): array
-    {
-        return $this->parent->evaluateFlag(
-            $featureKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
+    public function isEnabled(string $key, array $context = [], array $options = []): bool { return $this->parent->isEnabled($key, $this->context($context), $this->options($options)); }
+    public function evaluateFlag(string $key, array $context = [], array $options = []): array { return $this->parent->evaluateFlag($key, $this->context($context), $this->options($options)); }
+    public function getVariation(string $key, array $context = [], array $options = []) { return $this->parent->getVariation($key, $this->context($context), $this->options($options)); }
+    public function evaluateVariation(string $key, array $context = [], array $options = []): array { return $this->parent->evaluateVariation($key, $this->context($context), $this->options($options)); }
 
-    public function getVariation(string $featureKey, array $context = [], array $options = [])
+    private function variableArguments(string $first, string|array|null $second, array $third, array $fourth): array
     {
-        return $this->parent->getVariation(
-            $featureKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
+        if (is_string($second)) return [$first, $second, $this->context($third), $this->options($fourth)];
+        return [$first, $this->context($second ?? []), $this->options($third)];
     }
+    public function getVariable(string $first, string|array|null $second = null, array $third = [], array $fourth = []) { return $this->parent->getVariable(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function evaluateVariable(string $first, string|array|null $second = null, array $third = [], array $fourth = []): array { return $this->parent->evaluateVariable(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableBoolean(string $first, string|array|null $second = null, array $third = [], array $fourth = []): ?bool { return $this->parent->getVariableBoolean(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableString(string $first, string|array|null $second = null, array $third = [], array $fourth = []): ?string { return $this->parent->getVariableString(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableInteger(string $first, string|array|null $second = null, array $third = [], array $fourth = []): ?int { return $this->parent->getVariableInteger(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableDouble(string $first, string|array|null $second = null, array $third = [], array $fourth = []): ?float { return $this->parent->getVariableDouble(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableArray(string $first, string|array|null $second = null, array $third = [], array $fourth = []): ?array { return $this->parent->getVariableArray(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableObject(string $first, string|array|null $second = null, array $third = [], array $fourth = []) { return $this->parent->getVariableObject(...$this->variableArguments($first, $second, $third, $fourth)); }
+    public function getVariableJSON(string $first, string|array|null $second = null, array $third = [], array $fourth = []) { return $this->parent->getVariableJSON(...$this->variableArguments($first, $second, $third, $fourth)); }
 
-    public function evaluateVariation(string $featureKey, array $context = [], array $options = []): array
-    {
-        return $this->parent->evaluateVariation(
-            $featureKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariable(string $featureKey, string $variableKey, array $context = [], array $options = [])
-    {
-        return $this->parent->getVariable(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function evaluateVariable(string $featureKey, string $variableKey, array $context = [], array $options = []): array
-    {
-        return $this->parent->evaluateVariable(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableBoolean(string $featureKey, string $variableKey, array $context = [], array $options = []): ?bool
-    {
-        return $this->parent->getVariableBoolean(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableString(string $featureKey, string $variableKey, array $context = [], array $options = []): ?string
-    {
-        return $this->parent->getVariableString(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableInteger(string $featureKey, string $variableKey, array $context = [], array $options = []): ?int
-    {
-        return $this->parent->getVariableInteger(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableDouble(string $featureKey, string $variableKey, array $context = [], array $options = []): ?float
-    {
-        return $this->parent->getVariableDouble(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableArray(string $featureKey, string $variableKey, array $context = [], array $options = []): ?array
-    {
-        return $this->parent->getVariableArray(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableObject(string $featureKey, string $variableKey, array $context = [], array $options = [])
-    {
-        return $this->parent->getVariableObject(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getVariableJSON(string $featureKey, string $variableKey, array $context = [], array $options = [])
-    {
-        return $this->parent->getVariableJSON(
-            $featureKey,
-            $variableKey,
-            array_merge($this->context, $context),
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
-
-    public function getAllEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
-    {
-        return $this->parent->getAllEvaluations(
-            array_merge($this->context, $context),
-            $featureKeys,
-            array_merge($options, ['__featurevisorChildSticky' => $this->sticky])
-        );
-    }
+    public function getFeatureEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->parent->getFeatureEvaluations($this->context($context), $keys, $this->options($options)); }
+    public function getVariableEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->parent->getVariableEvaluations($this->context($context), $keys, $this->options($options)); }
+    public function getAllEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->getFeatureEvaluations($context, $keys, $options); }
 }
