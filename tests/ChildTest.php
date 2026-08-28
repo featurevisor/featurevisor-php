@@ -205,13 +205,13 @@ class ChildTest extends TestCase {
         $unsubscribeContext();
 
         self::assertFalse($childF->isEnabled('newFeature'));
-        $childF->setSticky([
+        $childF->setStickyFeatures([
             'newFeature' => [ 'enabled' => true ]
         ]);
         self::assertTrue($childF->isEnabled('newFeature'));
         self::assertEquals('sticky', $childF->evaluateFlag('newFeature')['reason']);
 
-        $allEvaluations = $childF->getAllEvaluations();
+        $allEvaluations = $childF->getFeatureEvaluations();
         self::assertEquals(['test', 'anotherTest'], array_keys($allEvaluations));
 
         $childF->close();

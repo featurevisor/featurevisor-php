@@ -20,7 +20,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
 - [Getting variables](#getting-variables)
   - [Type specific methods](#type-specific-methods)
 - [Getting all evaluations](#getting-all-evaluations)
-- [Sticky](#sticky)
+- [Sticky features and variables](#sticky-features-and-variables)
   - [Initialize with sticky](#initialize-with-sticky)
   - [Set sticky afterwards](#set-sticky-afterwards)
 - [Setting datafile](#setting-datafile)
@@ -35,7 +35,7 @@ This SDK is compatible with [Featurevisor](https://featurevisor.com/) v3.0 proje
 - [Events](#events)
   - [`datafile_set`](#datafile_set)
   - [`context_set`](#context_set)
-  - [`sticky_set`](#sticky_set)
+  - [`sticky_features_set` and `sticky_variables_set`](#sticky_features_set-and-sticky_variables_set)
   - [`error`](#error)
 - [Modules](#modules)
   - [Defining a module](#defining-a-module)
@@ -316,9 +316,7 @@ print_r($allEvaluations);
 
 This is handy especially when you want to pass all evaluations from a backend application to the frontend.
 
-`getAllEvaluations()` remains an alias for `getFeatureEvaluations()`.
-
-## Sticky
+## Sticky features and variables
 
 For the lifecycle of the SDK instance in your application, you can set some features with sticky values, meaning that they will not be evaluated against the fetched [datafile](https://featurevisor.com/docs/building-datafiles/):
 
@@ -518,14 +516,18 @@ $unsubscribe = $f->on('context_set', function ($event) {
 });
 ```
 
-### `sticky_set`
+### `sticky_features_set` and `sticky_variables_set`
 
 ```php
-$unsubscribe = $f->on('sticky_set', function ($event) {
+$unsubscribe = $f->on('sticky_features_set', function ($event) {
   $replaced = $event['replaced']; // true if sticky features got replaced
   $features = $event['features']; // list of all affected feature keys
 
   echo "Sticky features set";
+});
+
+$unsubscribeVariables = $f->on('sticky_variables_set', function ($event) {
+  $variables = $event['variables'];
 });
 ```
 
@@ -667,7 +669,7 @@ $myCustomModule = [
 ];
 ```
 
-The older `before` and `after` callbacks remain available for feature evaluations only. Use `beforeEvaluation` and `afterEvaluation` for code that must also observe global variables.
+For feature evaluations, all `before` callbacks run in registration order, followed by all `beforeEvaluation` callbacks. After evaluation and caller defaults, all `afterEvaluation` callbacks run, followed by all `after` callbacks. Global variable evaluations use only `beforeEvaluation` and `afterEvaluation`. Required feature checks run through the complete module pipeline, and transformed defaults are preserved.
 
 ### Registering modules
 
@@ -723,7 +725,6 @@ $globalVariableValue = $childF->getVariable('supportEmail');
 Similar to parent SDK, child instances also support several additional methods:
 
 - `setContext`
-- `setSticky`
 - `setStickyFeatures`
 - `setStickyVariables`
 - `evaluateFlag`
@@ -739,7 +740,6 @@ Similar to parent SDK, child instances also support several additional methods:
 - `getVariableArray`
 - `getVariableObject`
 - `getVariableJSON`
-- `getAllEvaluations`
 - `getFeatureEvaluations`
 - `getVariableEvaluations`
 - `on`
@@ -899,9 +899,9 @@ The provider maps Featurevisor evaluation results to OpenFeature details:
 
 | Featurevisor result | OpenFeature result |
 | --- | --- |
-| Required, forced, sticky, or rule match | `TARGETING_MATCH` |
+| Required feature rule, forced, sticky, or rule match | `TARGETING_MATCH` |
 | Traffic allocation | `SPLIT` |
-| Disabled variation or variable | `DISABLED` |
+| Unmet global variable requirements, disabled variation, or disabled variable | `DISABLED` |
 | No match or variable default | `DEFAULT` |
 | Missing feature, variable, or variations | `ERROR` with `FLAG_NOT_FOUND` |
 | Wrong resolver type | `ERROR` with `TYPE_MISMATCH` |

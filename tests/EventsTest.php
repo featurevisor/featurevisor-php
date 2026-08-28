@@ -7,23 +7,23 @@ use PHPUnit\Framework\TestCase;
 
 final class EventsTest extends TestCase
 {
-    public function testGetParamsForStickySetEventEmptyToNew(): void
+    public function testGetParamsForStickyFeaturesSetEventEmptyToNew(): void
     {
         self::assertSame([
             'features' => ['feature2', 'feature3'],
             'replaced' => true,
-        ], Events::getParamsForStickySetEvent([], [
+        ], Events::getParamsForStickyFeaturesSetEvent([], [
             'feature2' => ['enabled' => true],
             'feature3' => ['enabled' => true],
         ], true));
     }
 
-    public function testGetParamsForStickySetEventAddChangeRemove(): void
+    public function testGetParamsForStickyFeaturesSetEventAddChangeRemove(): void
     {
         self::assertSame([
             'features' => ['feature1', 'feature2', 'feature3'],
             'replaced' => true,
-        ], Events::getParamsForStickySetEvent([
+        ], Events::getParamsForStickyFeaturesSetEvent([
             'feature1' => ['enabled' => true],
             'feature2' => ['enabled' => true],
         ], [

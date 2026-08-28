@@ -343,6 +343,7 @@ final class OpenFeatureProviderTest extends TestCase
     {
         return [
             'required' => ['required', Reason::TARGETING_MATCH],
+            'required features unmet' => ['required_features_unmet', Reason::DISABLED],
             'forced' => ['forced', Reason::TARGETING_MATCH],
             'sticky' => ['sticky', Reason::TARGETING_MATCH],
             'rule' => ['rule', Reason::TARGETING_MATCH],

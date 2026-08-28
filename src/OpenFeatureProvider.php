@@ -209,9 +209,9 @@ final class OpenFeatureProvider extends AbstractProvider
     private function reason(string $reason): string
     {
         if (in_array($reason, ['feature_not_found', 'variable_not_found', 'no_variations', 'error'], true)) return Reason::ERROR;
-        if (in_array($reason, ['required', 'required_features_unmet', 'forced', 'sticky', 'rule', 'variable_override_variation', 'variable_override_rule'], true)) return Reason::TARGETING_MATCH;
+        if (in_array($reason, ['required', 'forced', 'sticky', 'rule', 'variable_override_variation', 'variable_override_rule'], true)) return Reason::TARGETING_MATCH;
         if ($reason === 'allocated') return Reason::SPLIT;
-        if (in_array($reason, ['disabled', 'variation_disabled', 'variable_disabled'], true)) return Reason::DISABLED;
+        if (in_array($reason, ['disabled', 'required_features_unmet', 'variation_disabled', 'variable_disabled'], true)) return Reason::DISABLED;
         return Reason::DEFAULT;
     }
 

@@ -4,7 +4,7 @@ namespace Featurevisor;
 
 class Events
 {
-    public static function getParamsForStickySetEvent(array $previous = [], array $current = [], bool $replace = false): array
+    public static function getParamsForStickyFeaturesSetEvent(array $previous = [], array $current = [], bool $replace = false): array
     {
         return ['features' => array_values(array_unique(array_merge(array_keys($previous), array_keys($current)))), 'replaced' => $replace];
     }

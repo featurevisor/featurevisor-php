@@ -30,7 +30,7 @@ final class InstanceDatafileTest extends TestCase
     public function testSharedV3ConformanceFixture(): void
     {
         $fixture = $this->fixture();
-        self::assertSame(5, $fixture['version']);
+        self::assertSame(6, $fixture['version']);
 
         $bucketValue = 0;
         $featurevisor = Featurevisor::createFeaturevisor([
@@ -104,7 +104,7 @@ final class InstanceDatafileTest extends TestCase
             'logLevel' => 'fatal',
             'datafile' => $aggregateCase['datafile'],
         ]);
-        $evaluated = $aggregateFeaturevisor->getAllEvaluations(
+        $evaluated = $aggregateFeaturevisor->getFeatureEvaluations(
             [],
             [],
             ['defaultVariationValue' => $aggregateCase['defaultVariationValue']]
@@ -235,6 +235,66 @@ final class InstanceDatafileTest extends TestCase
         self::assertSame($datafile['features']['test'], $featurevisor->getFeature('test'));
         self::assertNull($featurevisor->getFeature('missing'));
         self::assertFalse(class_exists('Featurevisor\\Internal\\DatafileReader'));
+    }
+
+    public function testModulePhasesFollowTheCanonicalOrder(): void
+    {
+        $featureEvents = [];
+        $globalEvents = [];
+        $modules = [];
+
+        foreach (['first', 'second'] as $name) {
+            $modules[] = [
+                'name' => $name,
+                'before' => static function (array $options) use (&$featureEvents, $name): array {
+                    $featureEvents[] = "before:{$name}";
+                    return $options;
+                },
+                'beforeEvaluation' => static function (array $options) use (&$featureEvents, &$globalEvents, $name): array {
+                    $event = "beforeEvaluation:{$name}";
+                    if (($options['featureKey'] ?? null) === null) {
+                        $globalEvents[] = $event;
+                    } else {
+                        $featureEvents[] = $event;
+                    }
+                    return $options;
+                },
+                'afterEvaluation' => static function (array $evaluation, array $options) use (&$featureEvents, &$globalEvents, $name): array {
+                    $event = "afterEvaluation:{$name}";
+                    if (($options['featureKey'] ?? null) === null) {
+                        $globalEvents[] = $event;
+                    } else {
+                        $featureEvents[] = $event;
+                    }
+                    return $evaluation;
+                },
+                'after' => static function (array $evaluation) use (&$featureEvents, $name): array {
+                    $featureEvents[] = "after:{$name}";
+                    return $evaluation;
+                },
+            ];
+        }
+
+        $f = Featurevisor::createFeaturevisor([
+            'datafile' => array_merge($this->datafile([], [
+                'test' => [
+                    'key' => 'test',
+                    'bucketBy' => 'userId',
+                    'traffic' => [['key' => 'all', 'segments' => '*', 'percentage' => 100000]],
+                ],
+            ]), [
+                'variables' => [
+                    'message' => ['type' => 'string', 'defaultValue' => 'hello'],
+                ],
+            ]),
+            'modules' => $modules,
+            'logLevel' => 'fatal',
+        ]);
+
+        self::assertTrue($f->isEnabled('test', ['userId' => 'user']));
+        self::assertSame('hello', $f->getVariable('message'));
+        self::assertSame($this->fixture()['modulePipeline']['featureOrder'], $featureEvents);
+        self::assertSame($this->fixture()['modulePipeline']['globalOrder'], $globalEvents);
     }
 
     public function testSegmentExpressionsMatchJavaScriptSemantics(): void

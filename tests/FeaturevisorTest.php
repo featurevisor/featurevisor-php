@@ -44,12 +44,12 @@ class FeaturevisorTest extends TestCase
             'segments' => [],
             'features' => [],
         ]);
-        $sdk->setSticky(['test' => ['enabled' => true]]);
+        $sdk->setStickyFeatures(['test' => ['enabled' => true]]);
         $sdk->setContext(['country' => 'nl']);
 
         $codes = array_column($diagnostics, 'code');
         self::assertContains('datafile_set', $codes);
-        self::assertContains('sticky_set', $codes);
+        self::assertContains('sticky_features_set', $codes);
         self::assertContains('context_set', $codes);
     }
 
@@ -385,7 +385,7 @@ class FeaturevisorTest extends TestCase
         ];
 
         $sdk = Featurevisor::createFeaturevisor([
-            'sticky' => [
+            'stickyFeatures' => [
                 'test' => [
                     'enabled' => true,
                     'variation' => 'control',
@@ -412,7 +412,7 @@ class FeaturevisorTest extends TestCase
         ]));
 
         // unsetting sticky features will make it treatment
-        $sdk->setSticky([], true);
+        $sdk->setStickyFeatures([], true);
         self::assertEquals('treatment', $sdk->getVariation('test', [
             'userId' => '123',
         ]));
@@ -1018,7 +1018,7 @@ class FeaturevisorTest extends TestCase
             'userId' => '123',
         ];
 
-        $evaluatedFeatures = $sdk->getAllEvaluations($context);
+        $evaluatedFeatures = $sdk->getFeatureEvaluations($context);
         self::assertEquals([
             'test' => [
                 'enabled' => true,
@@ -1491,7 +1491,7 @@ class FeaturevisorTest extends TestCase
         self::assertNull($sdk->getVariableArray('nonExistingFeature', 'simpleArray', $context));
         self::assertNull($sdk->getVariableObject('nonExistingFeature', 'themeConfig', $context));
 
-        $all = $sdk->getAllEvaluations($context);
+        $all = $sdk->getFeatureEvaluations($context);
         self::assertTrue($all['withArray']['enabled']);
         self::assertEquals(['red', 'blue', 'green'], $all['withArray']['variables']['simpleArray']);
         self::assertEquals(

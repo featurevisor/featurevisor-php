@@ -27,7 +27,7 @@ class EmitterTest extends TestCase {
         self::assertEquals(['key' => 'value'], $handledDetails[0]);
 
         // trigger unsubscribed event
-        $emitter->trigger('sticky_set', ['key' => 'value2']);
+        $emitter->trigger('sticky_features_set', ['key' => 'value2']);
         self::assertCount(1, $handledDetails);
 
         // unsubscribe
@@ -44,16 +44,16 @@ class EmitterTest extends TestCase {
         $calls = [];
         $unsubscribeSecond = function(): void {};
 
-        $emitter->on('sticky_set', function() use (&$calls, &$unsubscribeSecond) {
+        $emitter->on('sticky_features_set', function() use (&$calls, &$unsubscribeSecond) {
             $calls[] = 'first';
             call_user_func($unsubscribeSecond);
         });
-        $unsubscribeSecond = $emitter->on('sticky_set', function() use (&$calls) {
+        $unsubscribeSecond = $emitter->on('sticky_features_set', function() use (&$calls) {
             $calls[] = 'second';
         });
 
-        $emitter->trigger('sticky_set');
-        $emitter->trigger('sticky_set');
+        $emitter->trigger('sticky_features_set');
+        $emitter->trigger('sticky_features_set');
 
         self::assertSame(['first', 'second', 'first'], $calls);
     }

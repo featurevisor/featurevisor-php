@@ -37,7 +37,7 @@ class Featurevisor
      *     datafile?: string|array<string, mixed>,
      *     logLevel?: string,
      *     context?: array<string, mixed>,
-     *     sticky?: array<string, mixed>,
+     *     stickyFeatures?: array<string, mixed>,
      *     modules?: array<array{
      *         name?: string,
      *         before?: Closure,
@@ -61,7 +61,7 @@ class Featurevisor
         $this->logLevel = $this->validateLogLevel($options['logLevel'] ?? self::DEFAULT_LOG_LEVEL);
         $this->emitter = new Emitter();
         $this->context = $options['context'] ?? [];
-        $this->stickyFeatures = $options['stickyFeatures'] ?? ($options['sticky'] ?? null);
+        $this->stickyFeatures = $options['stickyFeatures'] ?? null;
         $this->stickyVariables = $options['stickyVariables'] ?? null;
         $this->onDiagnostic = $options['onDiagnostic'] ?? null;
         $this->moduleDiagnosticSubscriptions = [];
@@ -139,14 +139,6 @@ class Featurevisor
         }
     }
 
-    /**
-     * @param array<string, mixed> $sticky
-     */
-    public function setSticky(array $sticky, bool $replace = false): void
-    {
-        $this->setStickyFeatures($sticky, $replace);
-    }
-
     public function setStickyFeatures(array $sticky, bool $replace = false): void
     {
         if ($this->closed) {
@@ -161,15 +153,14 @@ class Featurevisor
             $this->stickyFeatures = array_merge($this->stickyFeatures ?? [], $sticky);
         }
 
-        $params = Events::getParamsForStickySetEvent($previousStickyFeatures, $this->stickyFeatures, $replace);
+        $params = Events::getParamsForStickyFeaturesSetEvent($previousStickyFeatures, $this->stickyFeatures, $replace);
 
         $this->reportDiagnostic([
             'level' => 'info',
-            'code' => 'sticky_set',
+            'code' => 'sticky_features_set',
             'message' => 'Sticky features set',
             'details' => $params,
         ]);
-        $this->emitter->trigger('sticky_set', $params);
         $this->emitter->trigger('sticky_features_set', $params);
     }
 
@@ -480,7 +471,7 @@ class Featurevisor
     /**
      * @param array<string, mixed> $context
      * @param array{
-     *     sticky?: array<string, mixed>
+     *     stickyFeatures?: array<string, mixed>
      * } $options
      * @return Child
      */
@@ -489,7 +480,7 @@ class Featurevisor
         return new Child([
             'parent' => $this,
             'context' => $this->getContext($context),
-            'stickyFeatures' => $options['stickyFeatures'] ?? ($options['sticky'] ?? null),
+            'stickyFeatures' => $options['stickyFeatures'] ?? null,
             'stickyVariables' => $options['stickyVariables'] ?? null,
         ]);
     }
@@ -1046,9 +1037,4 @@ class Featurevisor
         return $evaluations;
     }
 
-    /** @deprecated Use getFeatureEvaluations(). */
-    public function getAllEvaluations(array $context = [], array $featureKeys = [], array $options = []): array
-    {
-        return $this->getFeatureEvaluations($context, $featureKeys, $options);
-    }
 }

@@ -16,14 +16,14 @@ class Child
     {
         $this->parent = $options['parent'];
         $this->context = $options['context'];
-        $this->stickyFeatures = $options['stickyFeatures'] ?? ($options['sticky'] ?? []);
+        $this->stickyFeatures = $options['stickyFeatures'] ?? [];
         $this->stickyVariables = $options['stickyVariables'] ?? [];
         $this->emitter = new Emitter();
     }
 
     public function on(string $eventName, callable $callback): callable
     {
-        if (in_array($eventName, ['context_set', 'sticky_set', 'sticky_features_set', 'sticky_variables_set'], true)) {
+        if (in_array($eventName, ['context_set', 'sticky_features_set', 'sticky_variables_set'], true)) {
             return $this->emitter->on($eventName, $callback);
         }
         $parentUnsubscribe = $this->parent->on($eventName, $callback);
@@ -59,13 +59,11 @@ class Child
         return $this->parent->getContext(array_merge($this->context, $context));
     }
 
-    public function setSticky(array $sticky, bool $replace = false): void { $this->setStickyFeatures($sticky, $replace); }
     public function setStickyFeatures(array $sticky, bool $replace = false): void
     {
         $previous = $this->stickyFeatures;
         $this->stickyFeatures = $replace ? $sticky : array_merge($this->stickyFeatures, $sticky);
-        $params = Events::getParamsForStickySetEvent($previous, $this->stickyFeatures, $replace);
-        $this->emitter->trigger('sticky_set', $params);
+        $params = Events::getParamsForStickyFeaturesSetEvent($previous, $this->stickyFeatures, $replace);
         $this->emitter->trigger('sticky_features_set', $params);
     }
     public function setStickyVariables(array $sticky, bool $replace = false): void
@@ -106,5 +104,4 @@ class Child
 
     public function getFeatureEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->parent->getFeatureEvaluations($this->context($context), $keys, $this->options($options)); }
     public function getVariableEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->parent->getVariableEvaluations($this->context($context), $keys, $this->options($options)); }
-    public function getAllEvaluations(array $context = [], array $keys = [], array $options = []): array { return $this->getFeatureEvaluations($context, $keys, $options); }
 }

@@ -273,7 +273,7 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
 
     // Update the SDK instance context and sticky values for this assertion
     $f->setContext($context, true);
-    $f->setSticky($sticky, true);
+    $f->setStickyFeatures($sticky, true);
 
     $hasError = false;
     $errors = "";
