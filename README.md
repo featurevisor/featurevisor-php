@@ -426,7 +426,7 @@ loadDatafile($f, 'checkout');
 
 ### Updating datafile
 
-You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile_set) event that you can listen and react to accordingly.
+You can set the datafile as many times as you want in your application, which will result in emitting a [`datafile_set`](#datafile-set) event that you can listen and react to accordingly.
 
 The triggers for setting the datafile again can be:
 
@@ -468,7 +468,7 @@ $f = Featurevisor::createFeaturevisor([
 
 Every diagnostic has `level`, `code`, `message`, and an object-shaped `details` value. Optional `module`, `moduleName`, and `originalError` fields describe provenance. Evaluation metadata belongs in `details`.
 
-Diagnostic handlers are isolated from SDK behavior. An exception in a handler does not stop other handlers or evaluations.
+Diagnostic handlers are isolated from SDK behaviour. An exception in a handler does not stop other handlers or evaluations.
 
 
 ## Events
@@ -584,7 +584,7 @@ And optionally these properties depending on whether you are evaluating a featur
 
 ## Modules
 
-Modules allow you to intercept the evaluation process, report diagnostics, and customize behavior further as per your needs.
+Modules allow you to intercept the evaluation process, report diagnostics, and customize behaviour further as per your needs.
 
 ### Defining a module
 
@@ -670,6 +670,8 @@ $myCustomModule = [
 ```
 
 For feature evaluations, all `before` callbacks run in registration order, followed by all `beforeEvaluation` callbacks. After evaluation and caller defaults, all `afterEvaluation` callbacks run, followed by all `after` callbacks. Global variable evaluations use only `beforeEvaluation` and `afterEvaluation`. Required feature checks run through the complete module pipeline, and transformed defaults are preserved.
+
+`before` and `after` remain available as deprecated feature-only compatibility callbacks. Use `beforeEvaluation` and `afterEvaluation` for new modules so the same callbacks can handle feature and global variable evaluations.
 
 ### Registering modules
 
@@ -757,7 +759,7 @@ $f->close();
 
 This package also provides a CLI tool for running your Featurevisor project's test specs and benchmarking against this PHP SDK:
 
-All three commands accept repeatable `--target=<target>` options. `test` builds only the selected Target datafiles and runs untargeted assertions plus assertions for those targets. `benchmark` and `assess-distribution` run independently against every selected Target datafile. Without `--target`, existing project-wide behavior is preserved. Project definitions, test specs, Target discovery, and datafile generation continue to come from the Node.js CLI.
+All three commands accept repeatable `--target=<target>` options. `test` builds only the selected Target datafiles and runs untargeted assertions plus assertions for those targets. `benchmark` and `assess-distribution` run independently against every selected Target datafile. Without `--target`, existing project-wide behaviour is preserved. Project definitions, test specs, Target discovery, and datafile generation continue to come from the Node.js CLI.
 
 ### Test
 
