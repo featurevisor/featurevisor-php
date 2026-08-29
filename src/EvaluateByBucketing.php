@@ -6,6 +6,22 @@ use Featurevisor\Internal\Diagnostics;
 
 class EvaluateByBucketing
 {
+    private static function overrideMatches(array $override, array $options, array $datafile, array $context): bool
+    {
+        if (!Evaluate::requiredFeaturesAreMatched($override['requiredFeatures'] ?? null, $options)) return false;
+        $conditionsMatch = true;
+        $segmentsMatch = true;
+        if (isset($override['conditions'])) {
+            $conditions = Conditions::parseConditionsIfStringified($override['conditions'], $options['reportDiagnostic'] ?? null);
+            $conditionsMatch = $datafile['allConditionsAreMatched']($conditions, $context);
+        }
+        if (isset($override['segments'])) {
+            $segments = Conditions::parseSegmentsIfStringified($override['segments']);
+            $segmentsMatch = $datafile['allSegmentsAreMatched']($segments, $context);
+        }
+        return $conditionsMatch && $segmentsMatch;
+    }
+
     public static function evaluate(array $options, array $feature, ?array $variableSchema = null, ?array $force = null): array
     {
         $type = $options['type'];
@@ -238,26 +254,10 @@ class EvaluateByBucketing
                     $overrideIndex = -1;
 
                     foreach ($overrides as $index => $o) {
-                        if (isset($o['conditions'])) {
-                            $conditions = Conditions::parseConditionsIfStringified(
-                                $o['conditions'],
-                                $options['reportDiagnostic'] ?? null
-                            );
-
-                            if ($datafile['allConditionsAreMatched']($conditions, $context)) {
-                                $override = $o;
-                                $overrideIndex = $index;
-                                break;
-                            }
-                        }
-
-                        if (isset($o['segments'])) {
-                            $segments = Conditions::parseSegmentsIfStringified($o['segments']);
-                            if ($datafile['allSegmentsAreMatched']($segments, $context)) {
-                                $override = $o;
-                                $overrideIndex = $index;
-                                break;
-                            }
+                        if (self::overrideMatches($o, $options, $datafile, $context)) {
+                            $override = $o;
+                            $overrideIndex = $index;
+                            break;
                         }
                     }
 
@@ -274,6 +274,8 @@ class EvaluateByBucketing
                             'variableSchema' => $variableSchema,
                             'variableValue' => $override['value'],
                             'variableOverrideIndex' => $overrideIndex,
+                            'variableOverrideKey' => $override['key'] ?? null,
+                            'variableOverridePath' => $override['keyPath'] ?? null,
                         ];
 
                         Diagnostics::reportEvaluation($options, $result['evaluation'], 'variable override from rule');
@@ -329,26 +331,10 @@ class EvaluateByBucketing
                     $override = null;
                     $overrideIndex = -1;
                     foreach ($overrides as $index => $o) {
-                        if (isset($o['conditions'])) {
-                            $conditions = Conditions::parseConditionsIfStringified(
-                                $o['conditions'],
-                                $options['reportDiagnostic'] ?? null
-                            );
-
-                            if ($datafile['allConditionsAreMatched']($conditions, $context)) {
-                                $override = $o;
-                                $overrideIndex = $index;
-                                break;
-                            }
-                        }
-
-                        if (isset($o['segments'])) {
-                            $segments = Conditions::parseSegmentsIfStringified($o['segments']);
-                            if ($datafile['allSegmentsAreMatched']($segments, $context)) {
-                                $override = $o;
-                                $overrideIndex = $index;
-                                break;
-                            }
+                        if (self::overrideMatches($o, $options, $datafile, $context)) {
+                            $override = $o;
+                            $overrideIndex = $index;
+                            break;
                         }
                     }
 
@@ -365,6 +351,8 @@ class EvaluateByBucketing
                             'variableSchema' => $variableSchema,
                             'variableValue' => $override['value'],
                             'variableOverrideIndex' => $overrideIndex,
+                            'variableOverrideKey' => $override['key'] ?? null,
+                            'variableOverridePath' => $override['keyPath'] ?? null,
                         ];
 
                         Diagnostics::reportEvaluation($options, $result['evaluation'], 'variable override from variation');

@@ -145,6 +145,16 @@ class ModulesManager
         return $options;
     }
 
+    public function runBeforeEvaluationModules(array $options): array
+    {
+        foreach ($this->modules as $module) {
+            if (isset($module['beforeEvaluation']) && is_callable($module['beforeEvaluation'])) {
+                $options = $module['beforeEvaluation']($options);
+            }
+        }
+        return $options;
+    }
+
     public function runBucketKeyModules(array $options): string
     {
         $bucketKey = $options['bucketKey'];
@@ -183,6 +193,16 @@ class ModulesManager
             }
         }
 
+        return $evaluation;
+    }
+
+    public function runAfterEvaluationModules(array $evaluation, array $options): array
+    {
+        foreach ($this->modules as $module) {
+            if (isset($module['afterEvaluation']) && is_callable($module['afterEvaluation'])) {
+                $evaluation = $module['afterEvaluation']($evaluation, $options);
+            }
+        }
         return $evaluation;
     }
 

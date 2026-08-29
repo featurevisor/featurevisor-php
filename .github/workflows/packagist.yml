@@ -31,8 +31,8 @@ jobs:
       - name: Validate release tag
         shell: bash
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v2\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Expected a Featurevisor PHP v2 semantic version tag such as v2.0.0"
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v3\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a Featurevisor PHP v3 semantic version tag such as v3.0.0"
             exit 1
           fi
 

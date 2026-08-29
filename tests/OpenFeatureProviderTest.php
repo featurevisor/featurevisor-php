@@ -73,6 +73,18 @@ final class OpenFeatureProviderTest extends TestCase
                     'variations' => [],
                 ],
             ],
+            'variables' => [
+                'supportEmail' => [
+                    'type' => 'string',
+                    'defaultValue' => 'support@example.com',
+                    'overrides' => [[
+                        'key' => 'netherlands',
+                        'conditions' => ['attribute' => 'country', 'operator' => 'equals', 'value' => 'nl'],
+                        'value' => 'nl@example.com',
+                    ]],
+                ],
+                'limits' => ['type' => 'object', 'defaultValue' => ['requests' => 10]],
+            ],
         ];
     }
 
@@ -179,6 +191,26 @@ final class OpenFeatureProviderTest extends TestCase
 
         self::assertSame('on', $provider->resolveStringValue('checkout/$variation', 'fallback')->getValue());
         self::assertSame('Hello', $provider->resolveStringValue('checkout/title', 'fallback')->getValue());
+    }
+
+    public function testResolvesGlobalVariablesAndCustomPrefix(): void
+    {
+        $provider = $this->provider();
+        $context = new EvaluationContext(null, new Attributes(['country' => 'nl']));
+        self::assertSame('nl@example.com', $provider->resolveStringValue('variable:supportEmail', 'fallback', $context)->getValue());
+        self::assertSame(['requests' => 10], $provider->resolveObjectValue('variable:limits', [])->getValue());
+
+        $custom = new OpenFeatureProvider(
+            ['datafile' => $this->datafile(), 'logLevel' => 'fatal'],
+            null,
+            'userId',
+            '/',
+            '$variation',
+            '$variable'
+        );
+        self::assertSame('support@example.com', $custom->resolveStringValue('$variable/supportEmail', 'fallback')->getValue());
+        $this->expectException(\InvalidArgumentException::class);
+        new OpenFeatureProvider(globalVariablePrefix: 'global:variable');
     }
 
     public function testReturnsDefaultsAndStandardErrorsForMissingEntitiesAndMalformedDatafiles(): void
@@ -311,6 +343,7 @@ final class OpenFeatureProviderTest extends TestCase
     {
         return [
             'required' => ['required', Reason::TARGETING_MATCH],
+            'required features unmet' => ['required_features_unmet', Reason::DISABLED],
             'forced' => ['forced', Reason::TARGETING_MATCH],
             'sticky' => ['sticky', Reason::TARGETING_MATCH],
             'rule' => ['rule', Reason::TARGETING_MATCH],
@@ -364,7 +397,7 @@ final class OpenFeatureProviderTest extends TestCase
             'userId',
             ':',
             'variation',
-            static function (...$arguments) use (&$tracked): void {
+            onTrack: static function (...$arguments) use (&$tracked): void {
                 $tracked[] = $arguments;
             }
         );

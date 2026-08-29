@@ -64,7 +64,7 @@ final class JavaScriptAlignmentTest extends TestCase
         $featurevisor = Featurevisor::createFeaturevisor([
             'logLevel' => 'fatal',
             'datafile' => $this->datafile(['test' => $feature]),
-            'sticky' => ['test' => ['variables' => ['forced' => null]]],
+            'stickyFeatures' => ['test' => ['variables' => ['forced' => null]]],
         ]);
 
         $sticky = $featurevisor->evaluateVariable('test', 'forced');
@@ -140,7 +140,7 @@ final class JavaScriptAlignmentTest extends TestCase
         self::assertNull(Helpers::getValueByType(['key' => 'value'], 'array'));
     }
 
-    public function testGetAllEvaluationsDoesNotCacheNestedFlagEvaluations(): void
+    public function testGetFeatureEvaluationsDoesNotCacheNestedFlagEvaluations(): void
     {
         $beforeCalls = 0;
         $evaluationDiagnostics = 0;
@@ -167,7 +167,7 @@ final class JavaScriptAlignmentTest extends TestCase
             'datafile' => $this->datafile(['test' => $feature]),
         ]);
 
-        $featurevisor->getAllEvaluations(['userId' => '1']);
+        $featurevisor->getFeatureEvaluations(['userId' => '1']);
         self::assertSame(4, $beforeCalls);
         self::assertSame(7, $evaluationDiagnostics);
     }

@@ -30,7 +30,7 @@ final class InstanceDatafileTest extends TestCase
     public function testSharedV3ConformanceFixture(): void
     {
         $fixture = $this->fixture();
-        self::assertSame(2, $fixture['version']);
+        self::assertSame(6, $fixture['version']);
 
         $bucketValue = 0;
         $featurevisor = Featurevisor::createFeaturevisor([
@@ -104,7 +104,7 @@ final class InstanceDatafileTest extends TestCase
             'logLevel' => 'fatal',
             'datafile' => $aggregateCase['datafile'],
         ]);
-        $evaluated = $aggregateFeaturevisor->getAllEvaluations(
+        $evaluated = $aggregateFeaturevisor->getFeatureEvaluations(
             [],
             [],
             ['defaultVariationValue' => $aggregateCase['defaultVariationValue']]
@@ -146,6 +146,72 @@ final class InstanceDatafileTest extends TestCase
         self::assertSame('{}', json_encode($initialized['details']));
     }
 
+    public function testGlobalVariablesAndRequiredFeaturesConformance(): void
+    {
+        $fixture = $this->fixture();
+        $globals = $fixture['globalVariables'];
+        foreach ($globals['cases'] as $case) {
+            $f = Featurevisor::createFeaturevisor([
+                'datafile' => $globals['datafile'],
+                'stickyVariables' => $case['stickyVariables'] ?? [],
+                'logLevel' => 'fatal',
+            ]);
+            $options = [];
+            if (array_key_exists('defaultVariableValue', $case)) $options['defaultVariableValue'] = $case['defaultVariableValue'];
+            $evaluation = $f->evaluateVariable($case['key'], $case['context'] ?? [], $options);
+            self::assertSame($case['expectedValue'] ?? null, $evaluation['variableValue'] ?? null, $case['name']);
+            self::assertSame($case['expectedReason'], $evaluation['reason'], $case['name']);
+            self::assertSame($case['expectedOverrideIndex'] ?? null, $evaluation['variableOverrideIndex'] ?? null, $case['name']);
+            self::assertSame($case['expectedOverrideKey'] ?? null, $evaluation['variableOverrideKey'] ?? null, $case['name']);
+            self::assertSame($case['expectedOverridePath'] ?? null, $evaluation['variableOverridePath'] ?? null, $case['name']);
+        }
+        $overload = $globals['overloadCase'];
+        $f = Featurevisor::createFeaturevisor(['datafile' => $globals['datafile'], 'logLevel' => 'fatal']);
+        self::assertSame($overload['expectedGlobalValue'], $f->getVariable($overload['sharedKey']));
+        self::assertSame($overload['expectedFeatureValue'], $f->getVariable($overload['sharedKey'], $overload['featureVariableKey']));
+
+        $required = $fixture['requiredFeatures'];
+        $f = Featurevisor::createFeaturevisor(['datafile' => $required['datafile'], 'logLevel' => 'fatal']);
+        foreach ($required['cases'] as $case) self::assertSame($case['expectedEnabled'], $f->isEnabled($case['feature']), $case['name']);
+        $case = $required['featureVariableCase'];
+        $evaluation = $f->evaluateVariable($case['feature'], $case['variable']);
+        self::assertSame($case['expectedValue'], $evaluation['variableValue']);
+        self::assertSame($case['expectedOverrideKey'], $evaluation['variableOverrideKey']);
+    }
+
+    public function testGlobalVariableChildrenModulesAndDependencyEvents(): void
+    {
+        $globals = $this->fixture()['globalVariables'];
+        $observed = [];
+        $f = Featurevisor::createFeaturevisor([
+            'datafile' => $globals['datafile'],
+            'stickyVariables' => ['stringValue' => 'parent'],
+            'modules' => [[
+                'name' => 'unified',
+                'beforeEvaluation' => static function(array $options) use (&$observed): array { $observed[] = 'before'; return $options; },
+                'afterEvaluation' => static function(array $evaluation) use (&$observed): array { $observed[] = 'after'; return $evaluation; },
+            ]],
+            'logLevel' => 'fatal',
+        ]);
+        self::assertSame('parent', $f->getVariable('stringValue'));
+        self::assertSame(['before', 'after'], $observed);
+        $child = $f->spawn([], ['stickyVariables' => ['stringValue' => 'child']]);
+        self::assertSame('child', $child->getVariable('stringValue'));
+        self::assertSame(['integerValue' => 1], $child->getVariableEvaluations([], ['integerValue']));
+
+        $dependency = $globals['dependencyUpdateCase'];
+        foreach ($dependency['modes'] as $mode) {
+            $f = Featurevisor::createFeaturevisor(['datafile' => $dependency['initial'], 'logLevel' => 'fatal']);
+            $events = [];
+            $f->on('datafile_set', static function(array $event) use (&$events): void { $events[] = $event; });
+            $f->setDatafile($dependency['updated'], $mode['replace']);
+            sort($events[0]['features']);
+            sort($events[0]['variables']);
+            self::assertSame($dependency['expectedChangedFeatures'], $events[0]['features']);
+            self::assertSame($dependency['expectedChangedVariables'], $events[0]['variables']);
+        }
+    }
+
     public function testDatafileAccessLivesOnFeaturevisorInstance(): void
     {
         $datafile = $this->datafile([
@@ -169,6 +235,66 @@ final class InstanceDatafileTest extends TestCase
         self::assertSame($datafile['features']['test'], $featurevisor->getFeature('test'));
         self::assertNull($featurevisor->getFeature('missing'));
         self::assertFalse(class_exists('Featurevisor\\Internal\\DatafileReader'));
+    }
+
+    public function testModulePhasesFollowTheCanonicalOrder(): void
+    {
+        $featureEvents = [];
+        $globalEvents = [];
+        $modules = [];
+
+        foreach (['first', 'second'] as $name) {
+            $modules[] = [
+                'name' => $name,
+                'before' => static function (array $options) use (&$featureEvents, $name): array {
+                    $featureEvents[] = "before:{$name}";
+                    return $options;
+                },
+                'beforeEvaluation' => static function (array $options) use (&$featureEvents, &$globalEvents, $name): array {
+                    $event = "beforeEvaluation:{$name}";
+                    if (($options['featureKey'] ?? null) === null) {
+                        $globalEvents[] = $event;
+                    } else {
+                        $featureEvents[] = $event;
+                    }
+                    return $options;
+                },
+                'afterEvaluation' => static function (array $evaluation, array $options) use (&$featureEvents, &$globalEvents, $name): array {
+                    $event = "afterEvaluation:{$name}";
+                    if (($options['featureKey'] ?? null) === null) {
+                        $globalEvents[] = $event;
+                    } else {
+                        $featureEvents[] = $event;
+                    }
+                    return $evaluation;
+                },
+                'after' => static function (array $evaluation) use (&$featureEvents, $name): array {
+                    $featureEvents[] = "after:{$name}";
+                    return $evaluation;
+                },
+            ];
+        }
+
+        $f = Featurevisor::createFeaturevisor([
+            'datafile' => array_merge($this->datafile([], [
+                'test' => [
+                    'key' => 'test',
+                    'bucketBy' => 'userId',
+                    'traffic' => [['key' => 'all', 'segments' => '*', 'percentage' => 100000]],
+                ],
+            ]), [
+                'variables' => [
+                    'message' => ['type' => 'string', 'defaultValue' => 'hello'],
+                ],
+            ]),
+            'modules' => $modules,
+            'logLevel' => 'fatal',
+        ]);
+
+        self::assertTrue($f->isEnabled('test', ['userId' => 'user']));
+        self::assertSame('hello', $f->getVariable('message'));
+        self::assertSame($this->fixture()['modulePipeline']['featureOrder'], $featureEvents);
+        self::assertSame($this->fixture()['modulePipeline']['globalOrder'], $globalEvents);
     }
 
     public function testSegmentExpressionsMatchJavaScriptSemantics(): void
