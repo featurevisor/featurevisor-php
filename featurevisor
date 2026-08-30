@@ -53,6 +53,7 @@ $cliOptions = [
     'n' => parseCliOption($argv, 'n'),
     'onlyFailures' => parseCliOption($argv, 'onlyFailures'),
     'quiet' => parseCliOption($argv, 'quiet'),
+    'showDatafile' => parseCliOption($argv, 'showDatafile'),
     'variable' => parseCliOption($argv, 'variable'),
     'variation' => parseCliOption($argv, 'variation'),
     'verbose' => parseCliOption($argv, 'verbose'),
@@ -194,9 +195,7 @@ function getDatafileForAssertion(array $assertion, array $datafilesByKey): ?arra
 
     if (is_string($target)) {
         $targetDatafileKey = getTargetDatafileKey($baseDatafileKey, $target);
-        if (isset($datafilesByKey[$targetDatafileKey])) {
-            return $datafilesByKey[$targetDatafileKey];
-        }
+        return $datafilesByKey[$targetDatafileKey] ?? null;
     }
 
     return $datafilesByKey[$baseDatafileKey] ?? null;
@@ -372,8 +371,12 @@ function testFeature(array $assertion, string $featureKey, $f, string $level): a
     // children
     if (isset($assertion["children"])) {
         foreach ($assertion["children"] as $child) {
-            $childF = $f->spawn(isset($child["context"]) ? $child["context"] : []);
-            $childResult = testFeature($child, $featureKey, $childF, $level);
+            $childF = $f->spawn($child["context"] ?? []);
+            try {
+                $childResult = testFeature($child, $featureKey, $childF, $level);
+            } finally {
+                $childF->close();
+            }
             $duration += $childResult['duration'];
             $hasError = $hasError || $childResult['hasError'];
 
@@ -419,27 +422,56 @@ function testSegment(array $assertion, array $segment): array {
 }
 
 function testVariable(array $assertion, string $variableKey, Featurevisor $f): array {
-    $context = $assertion['context'] ?? [];
     $options = [];
     if (array_key_exists('defaultVariableValue', $assertion)) $options['defaultVariableValue'] = $assertion['defaultVariableValue'];
     $hasError = false;
     $errors = '';
     $started = microtime(true);
+    $evaluation = $f->evaluateVariable($variableKey, [], $options);
     if (array_key_exists('expectedValue', $assertion)) {
-        $actual = $f->getVariable($variableKey, $context, $options);
+        $actual = $evaluation['variableValue'] ?? null;
         if ($actual !== $assertion['expectedValue']) {
             $hasError = true;
             $errors .= '      ✘ expectedValue: expected '.json_encode($assertion['expectedValue']).' but received '.json_encode($actual).PHP_EOL;
         }
     }
     if (isset($assertion['expectedEvaluation'])) {
-        $evaluation = $f->evaluateVariable($variableKey, $context, $options);
         foreach ($assertion['expectedEvaluation'] as $key => $expected) {
             $actual = $evaluation[$key] ?? null;
             if ($actual !== $expected) {
                 $hasError = true;
                 $errors .= "      ✘ expectedEvaluation.$key: expected ".json_encode($expected).' but received '.json_encode($actual).PHP_EOL;
             }
+        }
+    }
+    foreach (($assertion['children'] ?? []) as $childIndex => $childAssertion) {
+        $child = $f->spawn($childAssertion['context'] ?? [], [
+            'stickyFeatures' => $childAssertion['stickyFeatures'] ?? [],
+            'stickyVariables' => $childAssertion['stickyVariables'] ?? [],
+        ]);
+        try {
+            $childOptions = [];
+            if (array_key_exists('defaultVariableValue', $childAssertion)) {
+                $childOptions['defaultVariableValue'] = $childAssertion['defaultVariableValue'];
+            }
+            $childEvaluation = $child->evaluateVariable($variableKey, [], $childOptions);
+            $prefix = "children[$childIndex].";
+            if (array_key_exists('expectedValue', $childAssertion)) {
+                $actual = $childEvaluation['variableValue'] ?? null;
+                if ($actual !== $childAssertion['expectedValue']) {
+                    $hasError = true;
+                    $errors .= "      ✘ {$prefix}expectedValue: expected ".json_encode($childAssertion['expectedValue']).' but received '.json_encode($actual).PHP_EOL;
+                }
+            }
+            foreach (($childAssertion['expectedEvaluation'] ?? []) as $key => $expected) {
+                $actual = $childEvaluation[$key] ?? null;
+                if ($actual !== $expected) {
+                    $hasError = true;
+                    $errors .= "      ✘ {$prefix}expectedEvaluation.$key: expected ".json_encode($expected).' but received '.json_encode($actual).PHP_EOL;
+                }
+            }
+        } finally {
+            $child->close();
         }
     }
     return ['hasError' => $hasError, 'errors' => $errors, 'duration' => microtime(true) - $started];
@@ -498,9 +530,13 @@ function test(array $cliOptions) {
                         'duration' => 0
                     ];
                 } else {
+                    if ($cliOptions['showDatafile'] === true) {
+                        echo PHP_EOL.json_encode($datafile, JSON_PRETTY_PRINT).PHP_EOL.PHP_EOL;
+                    }
                     $f = Featurevisor::createFeaturevisor([
                         'datafile' => $datafile,
                         'logLevel' => $level,
+                        'context' => $assertion['context'] ?? [],
                         'stickyFeatures' => $assertion['stickyFeatures'] ?? ($assertion['sticky'] ?? []),
                         'stickyVariables' => $assertion['stickyVariables'] ?? [],
                         'modules' => [
@@ -516,9 +552,13 @@ function test(array $cliOptions) {
                         ]
                     ]);
 
-                    $testResult = isset($test['feature'])
-                        ? testFeature($assertion, $test["feature"], $f, $level)
-                        : testVariable($assertion, $test['variable'], $f);
+                    try {
+                        $testResult = isset($test['feature'])
+                            ? testFeature($assertion, $test["feature"], $f, $level)
+                            : testVariable($assertion, $test['variable'], $f);
+                    } finally {
+                        $f->close();
+                    }
                 }
             } else if (isset($test["segment"])) {
                 $testResult = testSegment($assertion, $segmentsByKey[$test["segment"]]);

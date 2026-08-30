@@ -14,6 +14,11 @@ class FeaturevisorCliTest extends TestCase
         );
     }
 
+    public function testShowDatafileOption()
+    {
+        self::assertTrue(\parseCliOption(['featurevisor', 'test', '--showDatafile'], 'showDatafile'));
+    }
+
     public static function setUpBeforeClass(): void
     {
         if (!defined('FEATUREVISOR_CLI_TEST')) {
@@ -53,7 +58,7 @@ class FeaturevisorCliTest extends TestCase
         self::assertSame('target', $datafile['kind']);
     }
 
-    public function testTargetAssertionFallsBackToBaseDatafile()
+    public function testTargetAssertionDoesNotFallBackToBaseDatafile()
     {
         $datafile = \getDatafileForAssertion(
             [
@@ -65,7 +70,7 @@ class FeaturevisorCliTest extends TestCase
             ]
         );
 
-        self::assertSame('base', $datafile['kind']);
+        self::assertNull($datafile);
     }
 
     public function testNoEnvironmentTargetAssertionSelectsTargetDatafile()
